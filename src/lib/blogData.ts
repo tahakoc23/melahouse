@@ -24,7 +24,7 @@ export const BLOG_POSTS: BlogPost[] = [
       <p class="lead font-medium text-gray-800 text-base leading-relaxed">MELA HOUSE koleksiyonlarında kullanılan saf ipek ve dökümlü premium saten kumaşlar, <strong>online kadın giyim</strong> dünyasında zamansız lüksün simgesidir. Hassas doğal dokuları sebebiyle doğru bakım ilkeleri uygulandığında yıllar boyu ilk günkü ışıltısını korur.</p>
 
       <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">1. İpek ve Saten Kumaşların Yıkama Esasları</h3>
-      <p>Saf ipek giysiler ve <strong>günlük şık elbise</strong> tasarımları kesinlikle yüksek sıcaklıkta veya klasik çamaşır makinelerinin sıkma programlarında yıkamamalıdır. Soğuk suda (maksimum 30°C), ipek kumaşa özel pH dengeli şampuanlar ile elde çitilemeden yıkanması tavsiye edilir.</p>
+      <p>Saf ipek giysiler ve <strong>günlük şık elbise</strong> tasarımları kesinlikle yüksek sıcaklıkta veya klasik çamaşır makinelerinin sıkma programlarında yıkanmamalıdır. Soğuk suda (maksimum 30°C), ipek kumaşa özel pH dengeli şampuanlar ile elde çitilemeden yıkanması tavsiye edilir.</p>
 
       <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">2. Kurutma ve Ütüleme Teknikleri</h3>
       <p>Lüks <strong>kadın giyim</strong> ürünlerinizi asarken doğrudan güneş ışığına maruz bırakmaktan kaçının. Ütüleme işleminde elbisenin ters yüzünü çevirip düşük ısıda (ipek ayarında) veya buharlı dikey ütü ile kırışıklıklar giderilmelidir.</p>
@@ -37,7 +37,7 @@ export const BLOG_POSTS: BlogPost[] = [
     id: '2',
     title: 'Düğün İçin Sade ve Şık Kadın Elbise Modelleri & Kombin Tüyoları',
     slug: 'dusun-icin-sade-ve-sik-kadin-elbise-modelleri',
-    excerpt: 'Düğün ve davetlerde hem göz alıcı hem de zarif görünmenin sırrı: Düğün için sade ve shık kadın elbise modelleri, renk paletleri ve aksesuar önerileri.',
+    excerpt: 'Düğün ve davetlerde hem göz alıcı hem de zarif görünmenin sırrı: Düğün için sade ve şık kadın elbise modelleri, renk paletleri ve aksesuar önerileri.',
     date: '23 Ağustos 2026',
     readTime: '8 dk okuma',
     category: 'Davet & Abiye',
@@ -107,7 +107,7 @@ export const BLOG_POSTS: BlogPost[] = [
     date: '20 Ağustos 2026',
     readTime: '9 dk okuma',
     category: 'Ofis Modası',
-    image: 'https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?q=80&w=1200&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1200&auto=format&fit=crop',
     content: `
       <p class="lead font-medium text-gray-800 text-base leading-relaxed">İş yaşamında stiliniz vizyonunuzun aynasıdır. <strong>Ofis için kadın kumaş pantolon ceket kombinleri</strong>, hem konforu hem de otoriter şıklığı bir arada sunar.</p>
 
@@ -358,6 +358,126 @@ export const BLOG_POSTS: BlogPost[] = [
     image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1200&auto=format&fit=crop',
     content: `
       <p class="lead font-medium text-gray-800 text-base leading-relaxed">Dünyayı kasıp kavuran sessiz lüks trendi, <strong>kadın giyim</strong> dünyasına kalite odaklı ve zamansız bir yaklaşım getiriyor.</p>
+    `
+  },
+  /* --- 8 YENİ KADIN İÇ GİYİM & LÜKS EV GİYİMİ SEO REHBERİ --- */
+  {
+    id: '23',
+    title: 'İpek Gecelik ve Saten Sabahlık Seçim Rehberi: Lüks İç Giyim Şıklığı',
+    slug: 'ipek-gecelik-ve-saten-sabahlik-kombin-rehberi',
+    excerpt: 'Evde ve özel anlarınızda kendinizi şımartmanın en zarif yolu. Lüks kadın iç giyim, ipek gecelik modelleri ve dantel detaylı saten sabahlık tüyoları.',
+    date: '02 Ağustos 2026',
+    readTime: '7 dk okuma',
+    category: 'Lüks İç Giyim',
+    image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Cildinize dokunan en zarif kumaşlardan üretilen <strong>lüks kadın iç giyim</strong> ve <strong>ipek gecelik modelleri</strong>, günün yorgunluğunu üzerinizden atarken zarafetinizi korumanızı sağlar.</p>
+
+      <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">1. İpek Geceliklerin Cilt Sağlığına Faydaları</h3>
+      <p>Saf ipek, yapısı gereği protein lifleri içerir ve cildin nem dengesini korumaya yardımcı olur. Farklı <strong>kadın iç giyim modelleri</strong> arasında %100 ipek gecelikler, aşınmayı önleyerek gece boyunca pürüzsüz bir uyku kalitesi sunar.</p>
+
+      <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">2. Saten Sabahlık ve Kimono Kombinleri</h3>
+      <p>Sabah uyandığınızda veya akşam dinlenirken üzerinize geçireceğiniz dökümlü bir <strong>saten sabahlık ve kimono</strong>, evdeki duruşunuza anında sofistike bir dokunuş katar.</p>
+    `
+  },
+  {
+    id: '24',
+    title: 'Dantelli Büstiyer ve Jartiyer Takımı Nasıl Kombinlenir?',
+    slug: 'dantelli-bustiyer-ve-jartiyer-takimi-sikligi',
+    excerpt: 'Feminenliğin vurgusu dantelli büstiyer, jartiyer takımı ve ipek fantezi iç giyim tasarımlarında doğru beden ve stil seçim rehberi.',
+    date: '01 Ağustos 2026',
+    readTime: '8 dk okuma',
+    category: 'Lüks İç Giyim',
+    image: 'https://images.unsplash.com/photo-1583846783214-7229a91b20ed?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Özel koleksiyonların en göz alıcı parçalarından olan <strong>dantelli büstiyer</strong> ve <strong>jartiyer takımı</strong>, özgüvenli ve çekici bir stil yaratmak isteyen kadınların bir numaralı tercihidir.</p>
+
+      <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">1. Dantelli Büstiyerlerin Dış Giyimde Kullanımı</h3>
+      <p>Günümüz modasında <strong>ipek fantezi iç giyim</strong> ve büstiyer parçaları artık sadece elbise altında kalmıyor; şık bir <strong>kadın blazer ceket</strong> içine giyilerek gece davetlerinde iddialı bir kombin oluşturuyor.</p>
+    `
+  },
+  {
+    id: '25',
+    title: 'Çeyizlik İç Giyim Seti ve Gelin İç Giyim Takımları Seçim Rehberi',
+    slug: 'ceyizlik-ic-giyim-seti-ve-gelin-bohcasi-rehberi',
+    excerpt: 'Gelin adaylarının çeyiz bohçası için en şık ve kaliteli çeyizlik iç giyim seti, gelin iç giyim takımları ve ipek sabahlık önerileri.',
+    date: '31 Temmuz 2026',
+    readTime: '9 dk okuma',
+    category: 'Çeyiz & Gelin',
+    image: 'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Evlilik hazırlığındaki gelin adayları için hazırlanan <strong>çeyizlik iç giyim seti</strong> ve <strong>gelin iç giyim takımları</strong>, çeyiz bohçasının en özel ve değerli parçalarıdır.</p>
+
+      <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">1. Çeyizlik Setlerde Olması Gereken Parçalar</h3>
+      <p>Eksiksiz bir çeyizlik <strong>kadın iç giyim modelleri</strong> seçkisinde dantelli gecelik seti, saten sabahlık, 6'lı iç çamaşırı takımı ve ev terliği yer almalıdır.</p>
+    `
+  },
+  {
+    id: '26',
+    title: 'İz Yapmayan Dikişsiz Çamaşır ve Günlük Pamuklu İç Giyim Tüyoları',
+    slug: 'iz-yapmayan-dikissiz-camasir-ve-gunluk-konfor',
+    excerpt: 'Dar elbise ve kumaş pantolonların altında belli olmayan iz yapmayan dikişsiz çamaşır modelleri ve nefes alan günlük pamuklu iç giyim rehberi.',
+    date: '30 Temmuz 2026',
+    readTime: '6 dk okuma',
+    category: 'Günlük İç Giyim',
+    image: 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Özellikle dar abiyeler veya beyaz kumaş pantolonlar giyildiğinde kıyafet çizgisini bozmayan <strong>iz yapmayan dikişsiz çamaşır</strong> modelleri büyük bir konfor kurtarıcısıdır.</p>
+
+      <h3 className="font-playfair text-2xl font-semibold text-[#1A1A1A] mt-8 mb-4">1. Günlük Pamuklu İç Giyim ve Sağlık</h3>
+      <p>Günlük kullanımda cilt sağlığı için %100 organik nefes alabilir <strong>günlük pamuklu iç giyim</strong> çeşitleri tercih edilmelidir.</p>
+    `
+  },
+  {
+    id: '27',
+    title: 'Büyük Beden Kadın İç Giyim ve Destekli Sütyen Takımı Seçimi',
+    slug: 'buyuk-beden-kadin-ic-giyim-ve-destekli-sutyen-takimi',
+    excerpt: 'Kavisli ve kıvrımlı hatlara sahip kadınlar için toparlayıcı ve rahat büyük beden kadın iç giyim, destekli sütyen takımı seçim tüyoları.',
+    date: '29 Temmuz 2026',
+    readTime: '7 dk okuma',
+    category: 'İç Giyim Rehberi',
+    image: 'https://images.unsplash.com/photo-1502716119720-b23a93e5fe1b?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Doğru beden ve askı yapısına sahip <strong>büyük beden kadın iç giyim</strong> ve <strong>destekli sütyen takımı</strong> seçimi omurga sağlığı ve duruş zarafeti için kritik önem taşır.</p>
+    `
+  },
+  {
+    id: '28',
+    title: 'Kadın Pijama Takımı Saten Şıklığı ve Ev Modası Trendleri',
+    slug: 'saten-pijama-takimi-ve-kadin-ev-giyim-trendleri',
+    excerpt: 'Evdeki şıklığınızı taçlandıran düğmeli kadın pijama takımı saten modelleri, ipek ev elbiseleri ve kadın ev giyim ve iç giyim kombinleri.',
+    date: '28 Temmuz 2026',
+    readTime: '6 dk okuma',
+    category: 'Ev Modası',
+    image: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Son dönemde ev modasının en popüler trendi olan <strong>kadın pijama takımı saten</strong> koleksiyonları, pürüzsüz dokusuyla kendinizi özel hissettirir.</p>
+    `
+  },
+  {
+    id: '29',
+    title: 'Şeffaf Babydoll ve İpek Fantezi İç Giyim Modasında Zarafet',
+    slug: 'seffaf-babydoll-ve-ipek-fantezi-ic-giyim-modasi',
+    excerpt: 'Tül ve dantelin romantik buluşması: Şeffaf babydoll modelleri, ipek fantezi iç giyim ve özel geceler için cesur tasarımlar.',
+    date: '27 Temmuz 2026',
+    readTime: '6 dk okuma',
+    category: 'Lüks İç Giyim',
+    image: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">Gizemli ve romantik dokunuşlar sunan <strong>şeffaf babydoll</strong> ve <strong>ipek fantezi iç giyim</strong> tasarımları incelikli dantel işçilikleriyle büyüler.</p>
+    `
+  },
+  {
+    id: '30',
+    title: 'En İyi Kadın İç Giyim Markaları ve Kumaş Kalitesi Seçim Rehberi',
+    slug: 'en-iyi-kadin-ic-giyim-markalari-ve-kumas-kalitesi',
+    excerpt: 'Kaliteli, uzun ömürlü ve sağlıklı çamaşır alışverişi yaparken nelere dikkat edilmeli? En iyi kadın iç giyim markaları kıyaslaması.',
+    date: '26 Temmuz 2026',
+    readTime: '8 dk okuma',
+    category: 'Alışveriş Rehberi',
+    image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?q=80&w=1200&auto=format&fit=crop',
+    content: `
+      <p class="lead font-medium text-gray-800 text-base leading-relaxed">İç giyim alışverişinde doğru seçim yapmak <strong>en iyi kadın iç giyim markaları</strong> ve kumaş etiketi okuma bilinciyle mümkündür.</p>
     `
   }
 ]
