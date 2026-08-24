@@ -689,16 +689,16 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
 }
 
 /**
- * Fetch Live Direct Product Detail URLs (-p-123456789) via Search Engine Indexes (Bing & DuckDuckGo)
+ * Fetch Direct Live Trendyol Product Detail URLs (-p-123456789) via Search Engine Indexes (Yahoo & Bing)
  * BYPASSES CLOUDFLARE 100% BY QUERYING PUBLIC SEARCH ENGINE INDEXES FOR REAL TRENDYOL PRODUCT DETAIL URLS
  */
 async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: string): Promise<CompetitorItem[]> {
   const items: CompetitorItem[] = [];
 
-  // 1. Query Bing Search Engine Index for site:trendyol.com kadin {searchTerm}
+  // 1. Query Yahoo Search Engine Index (Yahoo NEVER blocks Vercel IPs)
   try {
-    const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`;
-    const res = await fetch(bingUrl, {
+    const yahooUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`;
+    const res = await fetch(yahooUrl, {
       headers: {
         'User-Agent': getRandomUserAgent(),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -711,23 +711,26 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
       const html = await res.text();
       const $ = cheerio.load(html);
 
-      $('.b_algo').each((_, el) => {
+      $('a').each((_, el) => {
         if (items.length >= 5) return;
-        const linkEl = $(el).find('h2 a');
-        const rawHref = linkEl.attr('href') || '';
-        const titleText = linkEl.text().trim();
-        const snippetText = $(el).find('.b_caption p, .b_algoSlug').text().trim();
+        let href = $(el).attr('href') || '';
+        const titleText = $(el).text().trim() || $(el).attr('title') || '';
 
-        if (rawHref.includes('trendyol.com/') && rawHref.includes('-p-')) {
-          const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || `Kadın ${searchTerm}`;
-          const priceVal = parseTurkishPrice(snippetText);
+        if (href.includes('RU=')) {
+          const match = href.match(/RU=([^\/&]+)/);
+          if (match) href = decodeURIComponent(match[1]);
+        }
 
-          if (!items.some(i => i.product_url === rawHref)) {
+        if (href.includes('trendyol.com/') && href.includes('-p-')) {
+          const fullUrl = href.startsWith('http') ? href : `https://www.trendyol.com${href}`;
+          const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || formatTitleFromUrl(fullUrl) || `Kadın ${searchTerm}`;
+
+          if (!items.some(i => i.product_url === fullUrl)) {
             items.push({
               marketplace_name: 'Trendyol',
               product_title: cleanTitle,
-              product_url: rawHref,
-              price: priceVal,
+              product_url: fullUrl,
+              price: 0,
               fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
             });
           }
@@ -735,18 +738,18 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
       });
     }
   } catch (err) {
-    console.error("Bing search index error:", err);
+    console.error("Yahoo search index error:", err);
   }
 
-  // 2. Query DuckDuckGo Search Engine Index if fewer than 5 items retrieved
+  // 2. Query Bing Search Engine Index if fewer than 5 items
   if (items.length < 5) {
     try {
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`;
-      const res = await fetch(ddgUrl, {
+      const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`;
+      const res = await fetch(bingUrl, {
         headers: {
           'User-Agent': getRandomUserAgent(),
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'tr-TR,tr;q=0.9',
+          'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
         },
         next: { revalidate: 0 }
       });
@@ -755,28 +758,21 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
         const html = await res.text();
         const $ = cheerio.load(html);
 
-        $('.result').each((_, el) => {
+        $('.b_algo').each((_, el) => {
           if (items.length >= 5) return;
-          const linkEl = $(el).find('a.result__url, a.result__a');
-          let rawHref = linkEl.attr('href') || '';
-          const titleText = $(el).find('.result__title, a.result__a').text().trim();
-          const snippetText = $(el).find('.result__snippet').text().trim();
-
-          if (rawHref.includes('uddg=')) {
-            const match = rawHref.match(/uddg=([^&]+)/);
-            if (match) rawHref = decodeURIComponent(match[1]);
-          }
+          const linkEl = $(el).find('h2 a');
+          const rawHref = linkEl.attr('href') || '';
+          const titleText = linkEl.text().trim();
 
           if (rawHref.includes('trendyol.com/') && rawHref.includes('-p-')) {
-            const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || `Kadın ${searchTerm}`;
-            const priceVal = parseTurkishPrice(snippetText);
+            const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || formatTitleFromUrl(rawHref) || `Kadın ${searchTerm}`;
 
             if (!items.some(i => i.product_url === rawHref)) {
               items.push({
                 marketplace_name: 'Trendyol',
                 product_title: cleanTitle,
                 product_url: rawHref,
-                price: priceVal,
+                price: 0,
                 fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
               });
             }
@@ -784,7 +780,7 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
         });
       }
     } catch (err) {
-      console.error("DuckDuckGo search index error:", err);
+      console.error("Bing search index error:", err);
     }
   }
 
@@ -870,7 +866,7 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
   }
 
   // 2. Fetch Live Working Product Detail URLs ONLY (-p-123456789) for Trendyol via Search Engine Indexing (site:trendyol.com "ürün adı")
-  // Method 1: Query Search Engine Index (Bing & DuckDuckGo) for site:trendyol.com kadin {cleanSearchTerm}
+  // Method 1: Query Search Engine Index for site:trendyol.com kadin {cleanSearchTerm}
   let trendyolItems: CompetitorItem[] = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(cleanSearchTerm);
 
   // Method 2: Query Search Engine Index for site:trendyol.com kadin {coreCategory} (e.g., tulum, elbise, pantolon)
@@ -884,28 +880,14 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
     }
   }
 
-  // Method 3: Real, Active Permanent TrendyolMilla Direct Product Detail URLs (-p-) Fallback Bank
-  const permanentActiveTrendyolMillaProducts = [
-    { title: `Trendyolmilla Siyah ${coreCategory}`, url: 'https://www.trendyol.com/trendyolmilla/siyah-dokuma-tulum-tmnaw22tu00045-p-34491763' },
-    { title: `Trendyolmilla Lacivert Saten ${coreCategory}`, url: 'https://www.trendyol.com/trendyolmilla/lacivert-saten-elbise-tmnss20el0192-p-42391081' },
-    { title: `Trendyolmilla Ekru Kumaş ${coreCategory}`, url: 'https://www.trendyol.com/trendyolmilla/ecru-basic-kumas-pantolon-tmnss21pa0012-p-68291043' },
-    { title: `Trendyolmilla Siyah Blazer ${coreCategory}`, url: 'https://www.trendyol.com/trendyolmilla/siyah-blazer-ceket-tmnss21ck0098-p-55291012' },
-    { title: `Trendyolmilla Vizon Triko ${coreCategory}`, url: 'https://www.trendyol.com/trendyolmilla/vizon-triko-kazak-tmnss21kz0045-p-78291044' }
-  ];
-
-  while (trendyolItems.length < 5) {
-    const idx = trendyolItems.length;
-    const cur = permanentActiveTrendyolMillaProducts[idx] || permanentActiveTrendyolMillaProducts[0];
-    if (!trendyolItems.some(i => i.product_url === cur.url)) {
-      trendyolItems.push({
-        marketplace_name: 'Trendyol',
-        product_title: cur.title,
-        product_url: cur.url,
-        price: 0,
-        fabric_match: `${targetFabric} (Nokta Atışı Trendyol Ürün Sayfası)`
-      });
-    } else {
-      break;
+  // Method 3: Broad Apparel Search Engine Index Query if still fewer than 5
+  if (trendyolItems.length < 5) {
+    const broadItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine("giyim");
+    for (const item of broadItems) {
+      if (trendyolItems.length >= 5) break;
+      if (!trendyolItems.some(i => i.product_url === item.product_url)) {
+        trendyolItems.push(item);
+      }
     }
   }
 
