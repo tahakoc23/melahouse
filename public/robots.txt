@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api
+Disallow: /hesabim
+Disallow: /siparislerim
+Disallow: /odeme
+Disallow: /sepet
+
+Sitemap: https://veloria.com.tr/sitemap.xml
