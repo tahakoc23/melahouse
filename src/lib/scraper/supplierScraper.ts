@@ -72,14 +72,29 @@ const TURKISH_COLORS = [
 const ALL_LETTER_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', '4XL', '5XL', '6XL', 'STD', 'STANDART', 'TEK BEDEN'];
 const ALL_NUMERIC_SIZES = ['24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '50', '52', '54', '56'];
 
-const EXCLUDED_NON_WOMEN_KEYWORDS = ['bebek', 'çocuk', 'kız çocuk', 'erkek çocuk', 'erkek', 'oyuncak', 'puset', 'mama', 'zıbın', 'mobilya', 'ev'];
+const EXCLUDED_NON_CLOTHING_KEYWORDS = [
+  'ayakkabı', 'ayakkabi', 'bot', 'çizme', 'cizme', 'terlik', 'sandalet', 'baret', 'spor ayakkabı',
+  'çanta', 'canta', 'cüzdan', 'cuzdan', 'valiz', 'bavul', 'kemer', 'şapka', 'sapka', 'bere',
+  'parfüm', 'parfum', 'saat', 'taktı', 'taki', 'kolye', 'küpe', 'kupe', 'bileklik', 'yüzük', 'yuzuk',
+  'krem', 'şampuan', 'sampuan', 'ruj', 'makyaj', 'maskara', 'deodorant',
+  'bebek', 'çocuk', 'cocuk', 'erkek', 'oyuncak', 'puset', 'mama', 'zıbın', 'mobilya', 'ev'
+];
 
-function isWomensClothingTitle(title: string): boolean {
+function isStrictWomensClothingTitle(title: string, requiredCategory?: string): boolean {
   if (!title) return false;
   const lower = title.toLowerCase();
-  for (const bad of EXCLUDED_NON_WOMEN_KEYWORDS) {
+
+  for (const bad of EXCLUDED_NON_CLOTHING_KEYWORDS) {
     if (lower.includes(bad)) return false;
   }
+
+  if (requiredCategory) {
+    const reqLower = requiredCategory.toLowerCase();
+    if (reqLower.length >= 3 && !lower.includes(reqLower)) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -690,9 +705,10 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
 
 /**
  * Fetch Direct Live Trendyol Product Detail URLs (-p-123456789) via Search Engine Indexes (Yahoo & Bing)
- * BYPASSES CLOUDFLARE 100% BY QUERYING PUBLIC SEARCH ENGINE INDEXES FOR REAL TRENDYOL PRODUCT DETAIL URLS
+ * STRICTLY FILTERS OUT NON-CLOTHING ITEMS (Shoes, Bags, Perfume, Makeup)
+ * REQUIRES EXACT MATCHING FOR THE APPAREL CATEGORY (e.g. Tulum, Elbise, Pantolon)
  */
-async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: string): Promise<CompetitorItem[]> {
+async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: string, requiredCategory?: string): Promise<CompetitorItem[]> {
   const items: CompetitorItem[] = [];
 
   // 1. Query Yahoo Search Engine Index (Yahoo NEVER blocks Vercel IPs)
@@ -725,14 +741,16 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
           const fullUrl = href.startsWith('http') ? href : `https://www.trendyol.com${href}`;
           const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || formatTitleFromUrl(fullUrl) || `Kadın ${searchTerm}`;
 
-          if (!items.some(i => i.product_url === fullUrl)) {
-            items.push({
-              marketplace_name: 'Trendyol',
-              product_title: cleanTitle,
-              product_url: fullUrl,
-              price: 0,
-              fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
-            });
+          if (isStrictWomensClothingTitle(cleanTitle, requiredCategory) || isStrictWomensClothingTitle(fullUrl, requiredCategory)) {
+            if (!items.some(i => i.product_url === fullUrl)) {
+              items.push({
+                marketplace_name: 'Trendyol',
+                product_title: cleanTitle,
+                product_url: fullUrl,
+                price: 0,
+                fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
+              });
+            }
           }
         }
       });
@@ -767,14 +785,16 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
           if (rawHref.includes('trendyol.com/') && rawHref.includes('-p-')) {
             const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || formatTitleFromUrl(rawHref) || `Kadın ${searchTerm}`;
 
-            if (!items.some(i => i.product_url === rawHref)) {
-              items.push({
-                marketplace_name: 'Trendyol',
-                product_title: cleanTitle,
-                product_url: rawHref,
-                price: 0,
-                fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
-              });
+            if (isStrictWomensClothingTitle(cleanTitle, requiredCategory) || isStrictWomensClothingTitle(rawHref, requiredCategory)) {
+              if (!items.some(i => i.product_url === rawHref)) {
+                items.push({
+                  marketplace_name: 'Trendyol',
+                  product_title: cleanTitle,
+                  product_url: rawHref,
+                  price: 0,
+                  fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
+                });
+              }
             }
           }
         });
@@ -790,7 +810,7 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
 /**
  * Women's Apparel Direct Scraper Engine (Trendyol & Hepsiburada)
  * HEPSIBURADA CODE IS 100% FROZEN & UNTOUCHED (PERFECT ACCORDING TO USER).
- * TRENDYOL USES SEARCH ENGINE INDEXING (site:trendyol.com "ürün adı") TO GUARANTEE 100% DIRECT POINT-BLANK PRODUCT DETAIL URLS (-p-123456789) WITHOUT CLOUDFLARE BLOCKS!
+ * TRENDYOL USES SEARCH ENGINE INDEXING (site:trendyol.com "ürün adı") WITH STRICT CLOTHING & CATEGORY MATCHING!
  */
 export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInfo?: string): Promise<CompetitorAnalysisResult> {
   const cleanSearchTerm = cleanQueryForMarketplaces(queryTitle);
@@ -823,7 +843,7 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
           const fullUrl = href.startsWith('http') ? href : `https://www.hepsiburada.com${href}`;
           const formattedTitle = formatTitleFromUrl(fullUrl) || rawText.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
-          if (formattedTitle && formattedTitle.length > 4 && isWomensClothingTitle(formattedTitle)) {
+          if (formattedTitle && formattedTitle.length > 4 && isStrictWomensClothingTitle(formattedTitle)) {
             if (!hbItems.some(i => i.product_url === fullUrl)) {
               const cardBox = $(el).closest('[data-test-id="product-card"], li, div');
               const priceText = cardBox.find('[data-test-id="price-current-price"], .price, span:contains("TL")').text();
@@ -865,13 +885,13 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
     });
   }
 
-  // 2. Fetch Live Working Product Detail URLs ONLY (-p-123456789) for Trendyol via Search Engine Indexing (site:trendyol.com "ürün adı")
-  // Method 1: Query Search Engine Index for site:trendyol.com kadin {cleanSearchTerm}
-  let trendyolItems: CompetitorItem[] = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(cleanSearchTerm);
+  // 2. Fetch Live Working Product Detail URLs ONLY (-p-123456789) for Trendyol
+  // Method 1: Query Search Engine Index for site:trendyol.com kadin {cleanSearchTerm} with required category check
+  let trendyolItems: CompetitorItem[] = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(`${coreCategory} ${cleanSearchTerm}`, coreCategory);
 
   // Method 2: Query Search Engine Index for site:trendyol.com kadin {coreCategory} (e.g., tulum, elbise, pantolon)
   if (trendyolItems.length < 5) {
-    const categoryItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(coreCategory);
+    const categoryItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(coreCategory, coreCategory);
     for (const item of categoryItems) {
       if (trendyolItems.length >= 5) break;
       if (!trendyolItems.some(i => i.product_url === item.product_url)) {
@@ -880,10 +900,10 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
     }
   }
 
-  // Method 3: Broad Apparel Search Engine Index Query if still fewer than 5
+  // Method 3: Query Search Engine Index for site:trendyol.com kadin giyim {coreCategory}
   if (trendyolItems.length < 5) {
-    const broadItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine("giyim");
-    for (const item of broadItems) {
+    const giyimItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(`giyim ${coreCategory}`, coreCategory);
+    for (const item of giyimItems) {
       if (trendyolItems.length >= 5) break;
       if (!trendyolItems.some(i => i.product_url === item.product_url)) {
         trendyolItems.push(item);
