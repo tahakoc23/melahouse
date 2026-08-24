@@ -72,10 +72,10 @@ export default function LoginForm() {
       className="bg-white p-6 sm:p-8 rounded-lg shadow-sm border border-gray-200"
     >
       <h1 className="text-2xl font-serif font-semibold text-center text-[#1A1A1A] mb-1 font-playfair">
-        MELA HOUSE'ya Giriş Yap
+        MELA HOUSE'a Giriş Yap
       </h1>
       <p className="text-xs text-gray-500 text-center mb-6 font-inter">
-        Hesabınıza giriş yaparak siparişlerinizi takip edin ve özel ayrıcalıklara erişin.
+        Hesabınıza giriş yaparak siparişlerinizi takip edin ve ayrıcalıklara erişin.
       </p>
       
       {error && (
@@ -84,7 +84,7 @@ export default function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 font-inter text-xs" autoComplete="off">
+      <form onSubmit={handleSubmit} className="space-y-4 font-inter text-xs" autoComplete="on">
         <div>
           <label className="block text-xs font-medium text-[#1A1A1A] mb-1 flex items-center gap-1.5">
             <Mail className="w-3.5 h-3.5 text-gray-400" /> E-posta Adresi
@@ -94,8 +94,9 @@ export default function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="ornek@email.com"
-            autoComplete="off"
+            placeholder="info@melahouse.net"
+            autoComplete="email"
+            name="email"
             className="w-full h-10 px-3 py-2 border border-gray-300 rounded-md text-xs text-[#1A1A1A] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C5A572] focus:border-transparent transition-colors"
           />
         </div>
@@ -106,13 +107,13 @@ export default function LoginForm() {
           </label>
           <div className="relative">
             <input
-              type="text"
+              type={showPassword ? "text" : "password"}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              autoComplete="off"
-              style={{ WebkitTextSecurity: showPassword ? 'none' : 'disc' } as any}
+              autoComplete="current-password"
+              name="password"
               className="w-full h-10 pl-3 pr-10 py-2 border border-gray-300 rounded-md text-xs text-[#1A1A1A] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C5A572] focus:border-transparent transition-colors"
             />
             <button

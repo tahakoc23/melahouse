@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
+import CookieConsent from "@/components/ui/CookieConsent";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -19,16 +20,17 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://melahouse.net"),
   title: {
     template: "%s | MELA HOUSE",
-    default: "MELA HOUSE - Lüks Kadın Giyim",
+    default: "MELA HOUSE - Lüks Kadın Giyim & İpek Koleksiyonlar",
   },
   description:
-    "MELA HOUSE, modern ve sofistike kadınlar için özel tasarım lüks giyim koleksiyonları sunar. Zarafeti ve kaliteyi keşfedin.",
-  keywords: ["lüks giyim", "kadın moda", "özel tasarım", "MELA HOUSE", "elbise", "koleksiyon"],
+    "MELA HOUSE, modern ve sofistike kadınlar için özel tasarım lüks giyim, ipek ve saten koleksiyonları sunar. Zarafeti ve lüksü keşfedin.",
+  keywords: ["lüks giyim", "kadın moda", "ipek elbise", "saten giyim", "MELA HOUSE", "elbise", "koleksiyon"],
   openGraph: {
     title: "MELA HOUSE - Lüks Kadın Giyim",
-    description: "MELA HOUSE ile zarafeti ve kaliteyi keşfedin.",
+    description: "MELA HOUSE ile zarafeti ve lüksü keşfedin.",
     url: "https://melahouse.net",
     siteName: "MELA HOUSE",
     locale: "tr_TR",
@@ -37,7 +39,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "MELA HOUSE - Lüks Kadın Giyim",
-    description: "MELA HOUSE ile zarafeti ve kaliteyi keşfedin.",
+    description: "MELA HOUSE ile zarafeti ve lüksü keşfedin.",
   },
   robots: {
     index: true,
@@ -54,6 +56,7 @@ export default function RootLayout({
     <html lang="tr" className={`${playfair.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-cream text-black antialiased font-inter">
         {children}
+        <CookieConsent />
       </body>
     </html>
   );

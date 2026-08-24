@@ -25,56 +25,10 @@ interface FeaturedProductsProps {
   products?: Product[]
 }
 
-const DEFAULT_PRODUCTS: Product[] = [
-  {
-    id: 'def-1',
-    name: 'Saten Kruvaze Abiye Elbise',
-    slug: 'saten-kruvaze-abiye-elbise',
-    base_price: 8500,
-    sale_price: 6990,
-    is_new: true,
-    product_images: [
-      { id: 'img-1', image_url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?q=80&w=800&auto=format&fit=crop', is_primary: true, sort_order: 1 },
-      { id: 'img-1b', image_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop', is_primary: false, sort_order: 2 }
-    ]
-  },
-  {
-    id: 'def-2',
-    name: 'İpek Dantel Detaylı Büstiyer',
-    slug: 'ipek-dantel-detayli-bustiyer',
-    base_price: 3450,
-    sale_price: null,
-    is_new: true,
-    product_images: [
-      { id: 'img-2', image_url: 'https://images.unsplash.com/photo-1583846783214-7229a91b20ed?q=80&w=800&auto=format&fit=crop', is_primary: true, sort_order: 1 }
-    ]
-  },
-  {
-    id: 'def-3',
-    name: 'Velvet Noir Gece Elbisesi',
-    slug: 'velvet-noir-gece-elbisesi',
-    base_price: 12500,
-    sale_price: 9800,
-    is_new: false,
-    product_images: [
-      { id: 'img-3', image_url: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=800&auto=format&fit=crop', is_primary: true, sort_order: 1 }
-    ]
-  },
-  {
-    id: 'def-4',
-    name: 'İpek Saten Sabahlık & Kimono',
-    slug: 'ipek-saten-sabahlik-kimono',
-    base_price: 4900,
-    sale_price: null,
-    is_new: true,
-    product_images: [
-      { id: 'img-4', image_url: 'https://images.unsplash.com/photo-1502716119720-b23a93e5fe1b?q=80&w=800&auto=format&fit=crop', is_primary: true, sort_order: 1 }
-    ]
-  }
-]
-
 export default function FeaturedProducts({ products }: FeaturedProductsProps) {
-  const displayProducts = products && products.length > 0 ? products : DEFAULT_PRODUCTS
+  if (!products || products.length === 0) {
+    return null
+  }
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -119,7 +73,7 @@ export default function FeaturedProducts({ products }: FeaturedProductsProps) {
         viewport={{ once: true, margin: '-50px' }}
         className="flex overflow-x-auto pb-8 -mx-4 px-4 gap-4 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-x-6 md:gap-y-12 md:overflow-visible md:pb-0 md:mx-0 md:px-0 snap-x snap-mandatory hide-scrollbar"
       >
-        {displayProducts.map((product) => (
+        {products.map((product) => (
           <motion.div 
             key={product.id} 
             variants={itemVariants}

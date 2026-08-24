@@ -2,7 +2,6 @@ import HeroSlider from '@/components/home/HeroSlider'
 import FeaturedProducts from '@/components/home/FeaturedProducts'
 import CategoryShowcase from '@/components/home/CategoryShowcase'
 import LookbookSection from '@/components/home/LookbookSection'
-import InstagramCTA from '@/components/home/InstagramCTA'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Metadata } from 'next'
 
@@ -20,7 +19,7 @@ export default async function HomePage() {
     .select('*')
     .eq('content_type', 'slider')
 
-  // Fetch featured products using admin client (bypasses RLS)
+  // Fetch featured products using admin client (only active, non-deleted products)
   const { data: featuredProducts } = await supabase
     .from('products')
     .select(`
@@ -53,7 +52,6 @@ export default async function HomePage() {
         <FeaturedProducts products={featuredProducts || []} />
         <CategoryShowcase categories={categories || []} />
         <LookbookSection content={lookbookContent} />
-        <InstagramCTA />
       </div>
     </div>
   )

@@ -41,15 +41,27 @@ export default function AdminProductsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
-      const { error } = await supabase.from('products' as any).delete().eq('id', id)
-      if (error) {
-        alert('Silinirken bir hata oluştu: ' + error.message)
-      } else {
-        setProducts(products.filter(p => p.id !== id))
+    if (window.confirm('Bu ürünü mağazanızdan ve ana sayfadan tamamen silmek istediğinize emin misiniz?')) {
+      try {
+        // Clean up linked rows first to prevent FK constraints & ghost references
+        await supabase.from('supplier_products' as any).delete().eq('product_id', id)
+        await supabase.from('product_images' as any).delete().eq('product_id', id)
+        await supabase.from('product_variants' as any).delete().eq('product_id', id)
+        await supabase.from('wishlist' as any).delete().eq('product_id', id)
+        await supabase.from('reviews' as any).delete().eq('product_id', id)
+
+        const { error } = await supabase.from('products' as any).delete().eq('id', id)
+        if (error) {
+          alert('Silinirken bir hata oluştu: ' + error.message)
+        } else {
+          setProducts(products.filter(p => p.id !== id))
+        }
+      } catch (err: any) {
+        alert('Silme hatası: ' + err.message)
       }
     }
   }
+
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 

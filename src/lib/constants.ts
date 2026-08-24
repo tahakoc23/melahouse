@@ -3,6 +3,8 @@ export const SITE_DESCRIPTION = 'Lüks Kadın Giyim & İç Giyim'
 export const SITE_URL = 'https://melahouse.net'
 export const INSTAGRAM_URL = 'https://instagram.com/melahouse.official'
 export const INSTAGRAM_HANDLE = '@melahouse.official'
+export const SITE_EMAIL = 'info@melahouse.net'
+
 
 export const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
   odeme_bekliyor: { label: 'Ödeme Bekliyor', color: 'bg-yellow-100 text-yellow-800' },
