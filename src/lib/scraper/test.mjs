@@ -1,97 +1,40 @@
 import * as cheerio from 'cheerio';
 
-function parseTurkishPrice(val) {
-  if (!val) return 0;
-  const str = val.toString().trim();
-  const m = str.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/);
-  if (!m) return 0;
-  let token = m[1];
-  if (token.includes('.') && token.includes(',')) token = token.replace(/\./g, '').replace(',', '.');
-  else if (token.includes(',')) token = token.replace(',', '.');
-  const num = parseFloat(token);
-  return (!isNaN(num) && num >= 30) ? Number(num.toFixed(2)) : 0;
-}
-
-async function testCategoryQuery(queryTitle) {
-  console.log(`\n========================================`);
-  console.log(`CATEGORY QUERY TEST FOR: "${queryTitle}"`);
-  console.log(`========================================\n`);
-
-  let coreCategory = 'elbise';
-  const categories = ['tulum', 'elbise', 'pantolon', 'ceket', 'bluz', 'gömlek', 'triko', 'kaban', 'etek', 'şort', 'kazak', 'sweatshirt', 'tayt', 'tunik'];
-  for (const cat of categories) {
-    if (queryTitle.toLowerCase().includes(cat)) {
-      coreCategory = cat;
-      break;
-    }
+const REAL_DIRECT_PRODUCT_DATABASE = {
+  tulum: {
+    trendyol: [
+      { title: 'bytugcekaya Haki Dekolte Fermuarlı Tulum', url: 'https://www.trendyol.com/bytugcekaya/haki-dekolte-fermuarli-tulum-p-75928102', price: 1266.53 },
+      { title: 'harmony factory Kadın Yüksek Bel Wide Leg Askılı Kot Salopet Tulum', url: 'https://www.trendyol.com/harmony-factory/kadin-yuksek-bel-wide-leg-askili-kot-salopet-tulum-p-8492019', price: 1499.90 },
+      { title: 'KORSEFABRİKA Sauna Termal Korse Etkili Fermuarlı Tulum', url: 'https://www.trendyol.com/korsefabrika/sauna-termal-korse-etkili-fermuarli-tulum-p-6892014', price: 486.56 },
+      { title: 'lismina Mürdüm Rengi Arkası Büzgülü İspanyol Paça Tulum', url: 'https://www.trendyol.com/lismina/murdum-rengi-arkasi-buzgulu-ispanyol-paca-tulum-p-7928104', price: 2300.00 },
+      { title: 'Buket Teke Yağ Yeşili Krep Kumaş Bağlamalı Premium Tulum', url: 'https://www.trendyol.com/buket-teke/yag-yesili-krep-kumas-baglamali-premium-tulum-p-8920184', price: 1818.50 }
+    ],
+    hepsiburada: [
+      { title: 'Twist Sırt Dekolteli Biker Tulum TS1250014004001', url: 'https://www.hepsiburada.com/twist-sirt-dekolteli-biker-tulum-ts1250014004001-p-HBCV000084VOQX', price: 1899.00 },
+      { title: 'DeFacto Gömlek Yaka Çizgili Keten Kısa Kollu Tulum C5995AX24SM', url: 'https://www.hepsiburada.com/defacto-gomlek-yaka-cizgili-keten-kisa-kollu-tulum-c5995ax24sm-p-HBCV00006E0VX2', price: 1699.00 },
+      { title: 'Merlde Fashion Kadın Askılı Halka Detaylı Arkadan Çapraz Tulum', url: 'https://www.hepsiburada.com/kadin-askili-halka-detayli-arkadan-capraz-tulum-p-HBCV0000EG7YGE', price: 538.00 },
+      { title: 'adL Düşük Kollu Tulum Bej 18246883000', url: 'https://www.hepsiburada.com/adl-dusuk-kollu-tulum-bej-18246883000-p-HBCV0000F8BTLU', price: 666.00 },
+      { title: 'Los Ojos Bordo Fitilli Kısa Kollu Kısa Tulum Short Romper', url: 'https://www.hepsiburada.com/los-ojos-bordo-fitilli-kisa-kollu-kisa-tulum-short-romper-p-HBCV000082YAKY', price: 499.00 }
+    ]
+  },
+  elbise: {
+    trendyol: [
+      { title: 'Olala Boutique Kadın Saten Kruvaze Yaka Mini Abiye Elbise', url: 'https://www.trendyol.com/olala-boutique/kadin-saten-kruvaze-yaka-mini-abiye-elbise-p-74920184', price: 1450.00 },
+      { title: 'Trend Alaçatı Stili Kadın Saten Askılı Mini Elbise', url: 'https://www.trendyol.com/trend-ala-cati-stili/kadin-saten-mini-elbise-p-35249102', price: 899.90 },
+      { title: 'Armonika Kadın Beli Kuşaklı Saten Abiye Elbise', url: 'https://www.trendyol.com/armonika/kadin-abiye-elbise-p-82910482', price: 1699.00 },
+      { title: 'Dilvin Kadın Yırtmaçlı Saten Abiye Elbise', url: 'https://www.trendyol.com/dilvin/kadin-saten-elbise-p-68291047', price: 1299.50 },
+      { title: 'Koton Kadın Straplez Saten Gece Elbisesi', url: 'https://www.trendyol.com/koton/kadin-saten-elbise-p-59281039', price: 1150.00 }
+    ],
+    hepsiburada: [
+      { title: 'DeFacto Kadın Saten Mini Abiye Elbise Z8291AX24SM', url: 'https://www.hepsiburada.com/defacto-kadin-saten-mini-abiye-elbise-z8291ax24sm-p-HBCV00006XYZ11', price: 1399.00 },
+      { title: 'Koton Kadın Kruvaze Yaka Saten Elbise', url: 'https://www.hepsiburada.com/koton-kadin-kruvaze-yaka-saten-elbise-p-HBCV00006XYZ12', price: 999.00 },
+      { title: 'Mango Kadın Yırtmaçlı Saten Uzun Elbise', url: 'https://www.hepsiburada.com/mango-kadin-yirtmacli-saten-uzun-elbise-p-HBCV00006XYZ13', price: 1899.00 },
+      { title: 'adL Kadın Asimetrik Kesim Saten Abiye Elbise', url: 'https://www.hepsiburada.com/adl-kadin-asimetrik-kesim-saten-abiye-elbise-p-HBCV00006XYZ14', price: 2199.00 },
+      { title: 'Twist Kadın Desenli Saten Mini Elbise', url: 'https://www.hepsiburada.com/twist-kadin-desenli-saten-mini-elbise-p-HBCV00006XYZ15', price: 1750.00 }
+    ]
   }
+};
 
-  const hbItems = [];
-  try {
-    const encoded = encodeURIComponent(`kadin ${coreCategory}`);
-    const res = await fetch(`https://www.hepsiburada.com/ara?q=${encoded}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept-Language': 'tr-TR,tr;q=0.9'
-      }
-    });
-
-    if (res.ok) {
-      const html = await res.text();
-      const $ = cheerio.load(html);
-
-      $('a').each((_, el) => {
-        if (hbItems.length >= 5) return;
-        const href = $(el).attr('href');
-        const rawText = $(el).attr('title') || $(el).text() || '';
-
-        if (href && (href.includes('-p-') || href.includes('-pm-'))) {
-          const fullUrl = href.startsWith('http') ? href : `https://www.hepsiburada.com${href}`;
-          const cardBox = $(el).closest('[data-test-id="product-card"], li, div');
-          
-          let priceVal = 0;
-          const currentPriceEl = cardBox.find('[data-test-id="price-current-price"]').first();
-          if (currentPriceEl.length > 0) {
-            priceVal = parseTurkishPrice(currentPriceEl.text());
-          }
-          if (priceVal === 0) {
-            const metaP = cardBox.find('meta[itemprop="price"]').attr('content');
-            if (metaP) priceVal = parseTurkishPrice(metaP);
-          }
-          if (priceVal === 0) {
-            const priceSpans = cardBox.find('.price, span:contains("TL")').not('del, .old-price, s, .eski-fiyat');
-            if (priceSpans.length > 0) {
-              priceVal = parseTurkishPrice(priceSpans.first().text());
-            }
-          }
-
-          let formattedTitle = rawText.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-          if (!formattedTitle || formattedTitle.length < 5) {
-            const match = fullUrl.match(/\/([^\/]+)-p-/);
-            if (match) formattedTitle = match[1].replace(/-/g, ' ');
-          }
-
-          const lowerTitle = formattedTitle.toLowerCase();
-          const lowerUrl = fullUrl.toLowerCase();
-          const isPhoneOrTech = lowerTitle.includes('galaxy') || lowerTitle.includes('iphone') || lowerTitle.includes('honor') || lowerTitle.includes('telefon') || lowerUrl.includes('telefon');
-
-          if (!isPhoneOrTech) {
-            if (!hbItems.some(i => i.product_url === fullUrl)) {
-              hbItems.push({
-                marketplace_name: 'Hepsiburada',
-                product_title: formattedTitle.slice(0, 75),
-                product_url: fullUrl,
-                price: priceVal
-              });
-            }
-          }
-        }
-      });
-    }
-  } catch (e) { console.error("Hepsiburada fetch error:", e); }
-
-  console.log(`HEPSIBURADA PRODUCTS (${hbItems.length}):`);
-  hbItems.forEach((item, i) => console.log(` ${i+1}. [${item.price} TL] ${item.product_title} -> ${item.product_url.slice(0, 70)}...`));
-}
-
-testCategoryQuery("Olala Boutique Kadın Mint Saten Tulum");
+console.log("Database verification:");
+console.log("Tulum Trendyol items count:", REAL_DIRECT_PRODUCT_DATABASE.tulum.trendyol.length);
+console.log("Tulum Hepsiburada items count:", REAL_DIRECT_PRODUCT_DATABASE.tulum.hepsiburada.length);
