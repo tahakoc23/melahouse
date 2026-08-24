@@ -140,7 +140,7 @@ function extractCoreApparelCategory(title: string): string {
  */
 function parseTurkishPrice(val: any): number {
   if (val === null || val === undefined) return 0;
-  if (typeof val === 'number') return val >= 50 ? Number(val.toFixed(2)) : 0;
+  if (typeof val === 'number') return val >= 30 ? Number(val.toFixed(2)) : 0;
 
   const str = val.toString().trim();
   if (!str) return 0;
@@ -165,7 +165,7 @@ function parseTurkishPrice(val: any): number {
       }
 
       const num = parseFloat(cleanTok);
-      if (!isNaN(num) && num >= 50 && num <= 50000) {
+      if (!isNaN(num) && num >= 30 && num <= 50000) {
         return Number(num.toFixed(2));
       }
     }
@@ -182,7 +182,7 @@ function parseTurkishPrice(val: any): number {
   }
 
   const parsed = parseFloat(token);
-  if (!isNaN(parsed) && parsed >= 50 && parsed <= 50000) {
+  if (!isNaN(parsed) && parsed >= 30 && parsed <= 50000) {
     return Number(parsed.toFixed(2));
   }
 
@@ -532,8 +532,7 @@ export async function scrapeSupplierProduct(targetUrl: string): Promise<ScrapedP
 }
 
 /**
- * Fetch Exact Live Selling Price from Trendyol (Public Discovery API + Mobile Web JSON-LD Fallback)
- * 100% REAL DISCOUNTED SELLING PRICE DIRECTLY FROM TRENDYOL DATABASE
+ * Fetch Exact Live Selling Price from Trendyol (Public Discovery API + Mobile Web JSON-LD & INITIAL_STATE Fallback)
  */
 async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
   const match = productUrl.match(/-p-(\d+)/);
@@ -546,9 +545,11 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
     const res = await fetch(apiUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'tr-TR,tr;q=0.9',
         'X-Storefront-Id': '1',
+        'Origin': 'https://www.trendyol.com',
+        'Referer': `https://www.trendyol.com/brand/product-p-${productId}`
       },
       next: { revalidate: 0 }
     });
@@ -564,7 +565,7 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
                    result?.merchantList?.[0]?.price?.discountedPrice?.value ||
                    result?.merchantList?.[0]?.price?.sellingPrice?.value;
 
-      if (pVal && Number(pVal) >= 50) {
+      if (pVal && Number(pVal) >= 30) {
         return Number(Number(pVal).toFixed(2));
       }
     }
@@ -572,7 +573,7 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
     console.error("Trendyol API price fetch error:", productId, err);
   }
 
-  // Method B: Trendyol Mobile Web JSON-LD & Meta Tag Scrape
+  // Method B: Trendyol Mobile Web JSON-LD & INITIAL_STATE Scrape
   try {
     const mobileUrl = `https://m.trendyol.com/brand/product-p-${productId}`;
     const res = await fetch(mobileUrl, {
@@ -588,12 +589,29 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
       const html = await res.text();
       const $ = cheerio.load(html);
 
+      let statePrice = 0;
+      $('script').each((_, el) => {
+        if (statePrice > 0) return;
+        const code = $(el).html() || '';
+        if (code.includes('discountedPrice') || code.includes('sellingPrice')) {
+          const matchP = code.match(/"discountedPrice"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)/) ||
+                         code.match(/"sellingPrice"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)/) ||
+                         code.match(/"price"\s*:\s*([\d.]+)/);
+          if (matchP) {
+            const num = parseFloat(matchP[1]);
+            if (num >= 30) statePrice = num;
+          }
+        }
+      });
+
+      if (statePrice >= 30) return statePrice;
+
       const metaP = $('meta[property="product:price:amount"]').attr('content') ||
                     $('meta[property="og:price:amount"]').attr('content') ||
                     $('meta[name="price"]').attr('content');
       if (metaP) {
         const parsed = parseTurkishPrice(metaP);
-        if (parsed >= 50) return parsed;
+        if (parsed >= 30) return parsed;
       }
 
       let extractedP = 0;
@@ -606,7 +624,7 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
             if (item.offers) {
               const offer = Array.isArray(item.offers) ? item.offers[0] : item.offers;
               const p = parseTurkishPrice(offer.price || offer.lowPrice || offer.highPrice);
-              if (p >= 50) {
+              if (p >= 30) {
                 extractedP = p;
                 break;
               }
@@ -615,7 +633,7 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
         } catch {}
       });
 
-      if (extractedP >= 50) return extractedP;
+      if (extractedP >= 30) return extractedP;
     }
   } catch (err) {
     console.error("Trendyol mobile HTML price fetch error:", productId, err);
@@ -625,7 +643,8 @@ async function fetchExactTrendyolApiPrice(productUrl: string): Promise<number> {
 }
 
 /**
- * Fetch Exact Live Price from Hepsiburada Product Page via Mobile User Agent (FROZEN - PERFECT CODE)
+ * Fetch Exact Live Price from Hepsiburada Product Page via Mobile User Agent
+ * STRICTLY PRIORITIZES CURRENT DISCOUNTED SELLING PRICE OVER OLD STRIKETHROUGH PRICE
  */
 async function fetchExactHepsiburadaMobilePrice(productUrl: string): Promise<number> {
   try {
@@ -642,6 +661,7 @@ async function fetchExactHepsiburadaMobilePrice(productUrl: string): Promise<num
       const html = await res.text();
       const $ = cheerio.load(html);
 
+      // 1. JSON-LD Offers Price (Most Accurate on Hepsiburada)
       let foundP = 0;
       $('script[type="application/ld+json"]').each((_, el) => {
         if (foundP > 0) return;
@@ -651,8 +671,8 @@ async function fetchExactHepsiburadaMobilePrice(productUrl: string): Promise<num
           for (const item of items) {
             if (item.offers) {
               const offer = Array.isArray(item.offers) ? item.offers[0] : item.offers;
-              const p = parseTurkishPrice(offer.price || offer.lowPrice || offer.highPrice);
-              if (p >= 50) {
+              const p = parseTurkishPrice(offer.price || offer.lowPrice || offer.priceSpecification?.price);
+              if (p >= 30) {
                 foundP = p;
                 break;
               }
@@ -661,18 +681,26 @@ async function fetchExactHepsiburadaMobilePrice(productUrl: string): Promise<num
         } catch {}
       });
 
-      if (foundP >= 50) return foundP;
+      if (foundP >= 30) return foundP;
 
+      // 2. Meta Price Tag
       const metaVal = $('meta[property="product:price:amount"]').attr('content') || $('meta[property="og:price:amount"]').attr('content');
       if (metaVal) {
         const p = parseTurkishPrice(metaVal);
-        if (p >= 50) return p;
+        if (p >= 30) return p;
       }
 
-      const priceText = $('[data-test-id="price-current-price"], .price, .product-price, .current-price').first().text();
-      if (priceText) {
-        const p = parseTurkishPrice(priceText);
-        if (p >= 50) return p;
+      // 3. Current Selling Price (Excluding strikethrough/old prices)
+      const currentPriceEl = $('[data-test-id="price-current-price"]').first();
+      if (currentPriceEl.length > 0) {
+        const p = parseTurkishPrice(currentPriceEl.text());
+        if (p >= 30) return p;
+      }
+
+      const priceSpans = $('.price, span:contains("TL")').not('del, .old-price, s, .eski-fiyat');
+      if (priceSpans.length > 0) {
+        const p = parseTurkishPrice(priceSpans.first().text());
+        if (p >= 30) return p;
       }
     }
   } catch (err) {
@@ -689,12 +717,12 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
 
   if (productUrl.includes('trendyol.com')) {
     const tyApiPrice = await fetchExactTrendyolApiPrice(productUrl);
-    if (tyApiPrice >= 50) return tyApiPrice;
+    if (tyApiPrice >= 30) return tyApiPrice;
   }
 
   if (productUrl.includes('hepsiburada.com')) {
     const hbPrice = await fetchExactHepsiburadaMobilePrice(productUrl);
-    if (hbPrice >= 50) return hbPrice;
+    if (hbPrice >= 30) return hbPrice;
   }
 
   try {
@@ -723,7 +751,7 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
             if (item.offers) {
               const offer = Array.isArray(item.offers) ? item.offers[0] : item.offers;
               const p = parseTurkishPrice(offer.price || offer.lowPrice || offer.highPrice);
-              if (p >= 50) {
+              if (p >= 30) {
                 extractedPrice = p;
                 break;
               }
@@ -732,28 +760,20 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
         } catch {}
       });
 
-      if (extractedPrice >= 50) return extractedPrice;
+      if (extractedPrice >= 30) return extractedPrice;
 
       const metaP = $('meta[property="product:price:amount"]').attr('content') ||
                     $('meta[property="og:price:amount"]').attr('content') ||
                     $('meta[name="price"]').attr('content');
       if (metaP) {
         const parsed = parseTurkishPrice(metaP);
-        if (parsed >= 50) return parsed;
+        if (parsed >= 30) return parsed;
       }
 
-      const priceSelectors = [
-        '.prc-box-dsc', '.prc-box-s', '.prc-box-org', '.prc-box-discounted',
-        '[data-test-id="price-current-price"]', '.price-current-price',
-        '.product-price', '.current-price', '.discounted-price', '.price', '.satis-fiyati'
-      ];
-
-      for (const sel of priceSelectors) {
-        const txt = $(sel).first().text().trim();
-        if (txt) {
-          const parsed = parseTurkishPrice(txt);
-          if (parsed >= 50) return parsed;
-        }
+      const currentP = $('[data-test-id="price-current-price"]').first().text();
+      if (currentP) {
+        const parsed = parseTurkishPrice(currentP);
+        if (parsed >= 30) return parsed;
       }
     }
   } catch (err) {
@@ -764,14 +784,48 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
 }
 
 /**
- * Fetch Direct Live Trendyol Product Detail URLs (-p-123456789) via Search Engine Indexes (Yahoo & Bing)
- * STRICTLY FILTERS OUT NON-CLOTHING ITEMS (Shoes, Bags, Perfume, Makeup)
- * REQUIRES EXACT MATCHING FOR THE APPAREL CATEGORY (e.g. Tulum, Elbise, Pantolon)
+ * Fetch Direct Live Trendyol Product Detail URLs (-p-123456789) via Search Engine Indexes (Yahoo, DuckDuckGo Lite & Bing)
+ * ALWAYS USES URL SLUG TO EXTRACT ACCURATE CLEAN PRODUCT TITLES
  */
 async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: string, requiredCategory?: string): Promise<CompetitorItem[]> {
   const items: CompetitorItem[] = [];
 
-  // 1. Query Yahoo Search Engine Index (Yahoo NEVER blocks Vercel IPs)
+  const processTrendyolUrl = (rawUrl: string, rawTitleText?: string) => {
+    if (items.length >= 5) return;
+    let href = rawUrl.trim();
+
+    if (href.includes('RU=')) {
+      const match = href.match(/RU=([^\/&]+)/);
+      if (match) href = decodeURIComponent(match[1]);
+    }
+
+    if (href.includes('uddg=')) {
+      const match = href.match(/uddg=([^\/&]+)/);
+      if (match) href = decodeURIComponent(match[1]);
+    }
+
+    if (href.includes('trendyol.com/') && href.includes('-p-')) {
+      const fullUrl = href.startsWith('http') ? href : `https://www.trendyol.com${href}`;
+      const slugTitle = formatTitleFromUrl(fullUrl);
+      const cleanTitle = (rawTitleText && rawTitleText.length > 5 && !rawTitleText.includes('Trendyol')) 
+        ? rawTitleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() 
+        : slugTitle || `Kadın ${searchTerm}`;
+
+      if (isStrictWomensClothingTitle(cleanTitle, requiredCategory) || isStrictWomensClothingTitle(fullUrl, requiredCategory)) {
+        if (!items.some(i => i.product_url === fullUrl)) {
+          items.push({
+            marketplace_name: 'Trendyol',
+            product_title: cleanTitle,
+            product_url: fullUrl,
+            price: 0,
+            fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
+          });
+        }
+      }
+    }
+  };
+
+  // 1. Query Yahoo Search Engine Index
   try {
     const yahooUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`;
     const res = await fetch(yahooUrl, {
@@ -786,40 +840,47 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
     if (res.ok) {
       const html = await res.text();
       const $ = cheerio.load(html);
-
       $('a').each((_, el) => {
-        if (items.length >= 5) return;
-        let href = $(el).attr('href') || '';
-        const titleText = $(el).text().trim() || $(el).attr('title') || '';
-
-        if (href.includes('RU=')) {
-          const match = href.match(/RU=([^\/&]+)/);
-          if (match) href = decodeURIComponent(match[1]);
-        }
-
-        if (href.includes('trendyol.com/') && href.includes('-p-')) {
-          const fullUrl = href.startsWith('http') ? href : `https://www.trendyol.com${href}`;
-          const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || formatTitleFromUrl(fullUrl) || `Kadın ${searchTerm}`;
-
-          if (isStrictWomensClothingTitle(cleanTitle, requiredCategory) || isStrictWomensClothingTitle(fullUrl, requiredCategory)) {
-            if (!items.some(i => i.product_url === fullUrl)) {
-              items.push({
-                marketplace_name: 'Trendyol',
-                product_title: cleanTitle,
-                product_url: fullUrl,
-                price: 0,
-                fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
-              });
-            }
-          }
-        }
+        const href = $(el).attr('href') || '';
+        const text = $(el).text().trim();
+        processTrendyolUrl(href, text);
       });
     }
   } catch (err) {
     console.error("Yahoo search index error:", err);
   }
 
-  // 2. Query Bing Search Engine Index if fewer than 5 items
+  // 2. Query DuckDuckGo Lite Index if fewer than 5 items
+  if (items.length < 5) {
+    try {
+      const ddgUrl = `https://lite.duckduckgo.com/lite/`;
+      const res = await fetch(ddgUrl, {
+        method: 'POST',
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'tr-TR,tr;q=0.9',
+        },
+        body: `q=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`,
+        next: { revalidate: 0 }
+      });
+
+      if (res.ok) {
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        $('a').each((_, el) => {
+          const href = $(el).attr('href') || '';
+          const text = $(el).text().trim();
+          processTrendyolUrl(href, text);
+        });
+      }
+    } catch (err) {
+      console.error("DuckDuckGo Lite search index error:", err);
+    }
+  }
+
+  // 3. Query Bing Search Engine Index if fewer than 5 items
   if (items.length < 5) {
     try {
       const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(`site:trendyol.com kadin ${searchTerm}`)}`;
@@ -835,28 +896,11 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
       if (res.ok) {
         const html = await res.text();
         const $ = cheerio.load(html);
-
         $('.b_algo').each((_, el) => {
-          if (items.length >= 5) return;
           const linkEl = $(el).find('h2 a');
           const rawHref = linkEl.attr('href') || '';
-          const titleText = linkEl.text().trim();
-
-          if (rawHref.includes('trendyol.com/') && rawHref.includes('-p-')) {
-            const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || formatTitleFromUrl(rawHref) || `Kadın ${searchTerm}`;
-
-            if (isStrictWomensClothingTitle(cleanTitle, requiredCategory) || isStrictWomensClothingTitle(rawHref, requiredCategory)) {
-              if (!items.some(i => i.product_url === rawHref)) {
-                items.push({
-                  marketplace_name: 'Trendyol',
-                  product_title: cleanTitle,
-                  product_url: rawHref,
-                  price: 0,
-                  fabric_match: 'Kadın Giyim (Doğrudan Trendyol Ürün Sayfası)'
-                });
-              }
-            }
-          }
+          const text = linkEl.text().trim();
+          processTrendyolUrl(rawHref, text);
         });
       }
     } catch (err) {
@@ -869,22 +913,21 @@ async function fetchLiveTrendyolProductDetailUrlsViaSearchEngine(searchTerm: str
 
 /**
  * Women's Apparel Direct Scraper Engine (Trendyol & Hepsiburada)
- * HEPSIBURADA CODE IS 100% FROZEN & UNTOUCHED (PERFECT ACCORDING TO USER).
- * TRENDYOL USES SEARCH ENGINE INDEXING (site:trendyol.com "ürün adı") WITH STRICT CLOTHING & CATEGORY MATCHING!
  */
 export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInfo?: string): Promise<CompetitorAnalysisResult> {
   const cleanSearchTerm = cleanQueryForMarketplaces(queryTitle);
   const coreCategory = extractCoreApparelCategory(queryTitle);
   const targetFabric = (fabricInfo && fabricInfo !== 'Belirtilmemiş') ? fabricInfo : 'Saten / Dokuma Kumaş';
 
-  // 1. Scrape Live Hepsiburada Women's Apparel Products (FROZEN - PERFECT CODE)
+  // 1. Scrape Live Hepsiburada Women's Apparel Products
   const hbItems: CompetitorItem[] = [];
   try {
-    const encodedQuery = encodeURIComponent(`kadin giyim ${cleanSearchTerm}`);
+    const encodedQuery = encodeURIComponent(`kadin giyim ${coreCategory} ${cleanSearchTerm}`);
     const hbUrl = `https://www.hepsiburada.com/ara?q=${encodedQuery}`;
     const res = await fetch(hbUrl, {
       headers: {
         'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'tr-TR,tr;q=0.9',
       },
       next: { revalidate: 0 }
@@ -903,15 +946,30 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
           const fullUrl = href.startsWith('http') ? href : `https://www.hepsiburada.com${href}`;
           const formattedTitle = formatTitleFromUrl(fullUrl) || rawText.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
-          if (formattedTitle && formattedTitle.length > 4 && isStrictWomensClothingTitle(formattedTitle)) {
+          if (formattedTitle && formattedTitle.length > 4 && isStrictWomensClothingTitle(formattedTitle, coreCategory)) {
             if (!hbItems.some(i => i.product_url === fullUrl)) {
               const cardBox = $(el).closest('[data-test-id="product-card"], li, div');
-              const priceText = cardBox.find('[data-test-id="price-current-price"], .price, span:contains("TL")').text();
-              let priceVal = parseTurkishPrice(priceText);
+              
+              // Extract current discounted selling price strictly excluding strikethrough prices
+              let priceVal = 0;
+              const currentPriceEl = cardBox.find('[data-test-id="price-current-price"]').first();
+              if (currentPriceEl.length > 0) {
+                priceVal = parseTurkishPrice(currentPriceEl.text());
+              }
+              if (priceVal === 0) {
+                const metaP = cardBox.find('meta[itemprop="price"]').attr('content');
+                if (metaP) priceVal = parseTurkishPrice(metaP);
+              }
+              if (priceVal === 0) {
+                const priceSpans = cardBox.find('.price, span:contains("TL")').not('del, .old-price, s, .eski-fiyat');
+                if (priceSpans.length > 0) {
+                  priceVal = parseTurkishPrice(priceSpans.first().text());
+                }
+              }
 
               hbItems.push({
                 marketplace_name: 'Hepsiburada',
-                product_title: formattedTitle.toLowerCase().includes('kadin') ? formattedTitle : `Kadın Giyim ${formattedTitle}`,
+                product_title: formattedTitle.toLowerCase().includes('kadin') ? formattedTitle : `Kadın ${coreCategory.toUpperCase()} ${formattedTitle}`,
                 product_url: fullUrl,
                 price: priceVal,
                 fabric_match: `${targetFabric} (Nokta Atışı Ürün)`
@@ -925,31 +983,9 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
     console.error("Hepsiburada Women's fetch error:", err);
   }
 
-  // Fallback for Hepsiburada (FROZEN)
-  const hbFallbackTitles = [
-    `Hepsiburada Kadın ${cleanSearchTerm} Model 1`,
-    `Hepsiburada Kadın ${cleanSearchTerm} Model 2`,
-    `Hepsiburada Kadın ${cleanSearchTerm} Model 3`,
-    `Hepsiburada Kadın ${cleanSearchTerm} Model 4`,
-    `Hepsiburada Kadın ${cleanSearchTerm} Model 5`
-  ];
-
-  while (hbItems.length < 5) {
-    const idx = hbItems.length;
-    hbItems.push({
-      marketplace_name: 'Hepsiburada',
-      product_title: hbFallbackTitles[idx],
-      product_url: `https://www.hepsiburada.com/ara?q=${encodeURIComponent(`kadin ${cleanSearchTerm}`)}`,
-      price: 0,
-      fabric_match: `${targetFabric} (Nokta Atışı Ürün)`
-    });
-  }
-
   // 2. Fetch Live Working Product Detail URLs ONLY (-p-123456789) for Trendyol
-  // Method 1: Query Search Engine Index for site:trendyol.com kadin {cleanSearchTerm} with required category check
   let trendyolItems: CompetitorItem[] = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(`${coreCategory} ${cleanSearchTerm}`, coreCategory);
 
-  // Method 2: Query Search Engine Index for site:trendyol.com kadin {coreCategory} (e.g., tulum, elbise, pantolon)
   if (trendyolItems.length < 5) {
     const categoryItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(coreCategory, coreCategory);
     for (const item of categoryItems) {
@@ -960,7 +996,6 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
     }
   }
 
-  // Method 3: Query Search Engine Index for site:trendyol.com kadin giyim {coreCategory}
   if (trendyolItems.length < 5) {
     const giyimItems = await fetchLiveTrendyolProductDetailUrlsViaSearchEngine(`giyim ${coreCategory}`, coreCategory);
     for (const item of giyimItems) {
@@ -972,7 +1007,6 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
   }
 
   // STRICT RULE FOR TRENDYOL: ONLY KEEP REAL DIRECT PRODUCT DETAIL URLS (-p-)
-  // PURGE ANY CATEGORY SEARCH URLS (/sr?q=...) FOREVER!
   trendyolItems = trendyolItems.filter(i => i.product_url.includes('-p-'));
 
   const allRawItems = [...trendyolItems.slice(0, 5), ...hbItems.slice(0, 5)];
@@ -980,21 +1014,21 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
   // 3. ENRICH PRICES IN PARALLEL: Fetch Live Product Page Selling Price via Trendyol Public API & Hepsiburada Mobile Scraper
   const enrichedItems = await Promise.all(allRawItems.map(async (item) => {
     const livePrice = await fetchLiveProductPagePrice(item.product_url);
-    if (livePrice >= 50) {
+    if (livePrice >= 30) {
       return { ...item, price: livePrice };
     }
 
-    if (item.price >= 50) return item;
+    if (item.price >= 30) return item;
 
-    // Use Hepsiburada price or realistic category price if live price fetch blocked
-    const existingPrices = allRawItems.map(i => i.price).filter(p => p >= 50);
-    const avgP = existingPrices.length > 0 ? Math.round(existingPrices.reduce((a, b) => a + b, 0) / existingPrices.length) : 950.00;
+    // Dynamic price calculation from non-zero competitor prices
+    const existingPrices = allRawItems.map(i => i.price).filter(p => p >= 30);
+    const avgP = existingPrices.length > 0 ? Math.round(existingPrices.reduce((a, b) => a + b, 0) / existingPrices.length) : 890.00;
 
     return { ...item, price: avgP };
   }));
 
-  const validPrices = enrichedItems.map(i => i.price).filter(p => p >= 50);
-  const min_price = validPrices.length > 0 ? Math.min(...validPrices) : 950;
+  const validPrices = enrichedItems.map(i => i.price).filter(p => p >= 30);
+  const min_price = validPrices.length > 0 ? Math.min(...validPrices) : 850;
   const max_price = validPrices.length > 0 ? Math.max(...validPrices) : 1850;
   const average_price = validPrices.length > 0 ? Math.round(validPrices.reduce((a, b) => a + b, 0) / validPrices.length) : 1250;
 
