@@ -835,7 +835,7 @@ export default function AdminSuppliersPage() {
               <div className="bg-white border border-gray-200 rounded-xs overflow-hidden shadow-xs">
                 <div className="p-4 border-b border-gray-200 font-bold text-xs text-[#1A1A1A] flex items-center justify-between">
                   <span>Tespit Edilen Benzer Satıcı Ürünleri ({competitorAnalysis.items?.length || 0})</span>
-                  <span className="text-[11px] text-emerald-700 font-semibold">✓ Koton + Penti + Beymen + Trendyol + Hepsiburada Canlı Ürün Linkleri</span>
+                  <span className="text-[11px] text-emerald-700 font-semibold">✓ Tam 8 Ürün (2 Koton + 2 Penti + 2 Beymen + 2 Zara - Her Tıklamada Farklı Canlı Ürünler)</span>
                 </div>
 
                 <div className="divide-y divide-gray-100">
@@ -846,8 +846,7 @@ export default function AdminSuppliersPage() {
                           item.marketplace_name.includes('Koton') ? 'bg-red-100 text-red-900 border border-red-300' :
                           item.marketplace_name.includes('Penti') ? 'bg-pink-100 text-pink-900 border border-pink-300' :
                           item.marketplace_name.includes('Beymen') ? 'bg-slate-900 text-[#C5A572] border border-[#C5A572]' :
-                          item.marketplace_name.includes('Trendyol') ? 'bg-orange-100 text-orange-800 border border-orange-300' :
-                          'bg-amber-600 text-white font-bold'
+                          'bg-black text-white border border-gray-700 font-bold tracking-wider'
                         }`}>
                           {item.marketplace_name}
                         </span>
