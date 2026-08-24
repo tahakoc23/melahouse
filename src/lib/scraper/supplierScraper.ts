@@ -102,35 +102,59 @@ function formatTitleFromUrl(url: string): string {
 }
 
 /**
- * High-Precision Turkish Currency Price Parser
+ * Bulletproof Turkish Currency Price Parser
+ * Ignores installment counts ("3 taksit"), discount percentages ("%20"), ratings ("5 yıldız")
+ * Strictly parses numbers associated with TL / ₺ / TRY or valid clothing prices (>= 50 TL)
  */
 function parseTurkishPrice(val: any): number {
   if (val === null || val === undefined) return 0;
-  if (typeof val === 'number') return val > 0 ? Number(val.toFixed(2)) : 0;
+  if (typeof val === 'number') return val >= 50 ? Number(val.toFixed(2)) : 0;
 
   const str = val.toString().trim();
   if (!str) return 0;
 
-  const tokens = str.match(/\d+(?:[.,]\d+)*/g);
-  if (!tokens || tokens.length === 0) return 0;
+  // 1. Look for number attached directly to TL / ₺ / TRY
+  const currencyMatch = str.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:₺|TL|TRY)/i) ||
+                        str.match(/(?:₺|TL|TRY)\s*(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);
 
-  for (const rawToken of tokens) {
-    let token = rawToken;
-    
-    if (token.includes('.') && token.includes(',')) {
-      token = token.replace(/\./g, '').replace(',', '.');
-    }
-    else if (token.includes(',')) {
-      token = token.replace(',', '.');
-    }
-    else if (token.includes('.') && /^\d{1,3}\.\d{3}$/.test(token)) {
-      token = token.replace('.', '');
-    }
+  let rawToken = currencyMatch ? currencyMatch[1] : '';
 
-    const parsed = parseFloat(token);
-    if (!isNaN(parsed) && parsed > 0) {
-      return Number(parsed.toFixed(2));
+  // 2. If no currency symbol found, search for candidate price tokens >= 50 TL
+  if (!rawToken) {
+    const tokens = str.match(/\d+(?:[.,]\d+)*/g);
+    if (!tokens || tokens.length === 0) return 0;
+
+    for (const tok of tokens) {
+      let cleanTok = tok;
+      if (cleanTok.includes('.') && cleanTok.includes(',')) {
+        cleanTok = cleanTok.replace(/\./g, '').replace(',', '.');
+      } else if (cleanTok.includes(',')) {
+        cleanTok = cleanTok.replace(',', '.');
+      } else if (cleanTok.includes('.') && /^\d{1,3}\.\d{3}$/.test(cleanTok)) {
+        cleanTok = cleanTok.replace('.', '');
+      }
+
+      const num = parseFloat(cleanTok);
+      if (!isNaN(num) && num >= 50 && num <= 50000) {
+        return Number(num.toFixed(2));
+      }
     }
+    return 0;
+  }
+
+  // Parse the token matched with TL / ₺
+  let token = rawToken;
+  if (token.includes('.') && token.includes(',')) {
+    token = token.replace(/\./g, '').replace(',', '.');
+  } else if (token.includes(',')) {
+    token = token.replace(',', '.');
+  } else if (token.includes('.') && /^\d{1,3}\.\d{3}$/.test(token)) {
+    token = token.replace('.', '');
+  }
+
+  const parsed = parseFloat(token);
+  if (!isNaN(parsed) && parsed >= 50 && parsed <= 50000) {
+    return Number(parsed.toFixed(2));
   }
 
   return 0;
@@ -520,7 +544,7 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
             if (item.offers) {
               const offer = Array.isArray(item.offers) ? item.offers[0] : item.offers;
               const p = parseTurkishPrice(offer.price || offer.lowPrice || offer.highPrice);
-              if (p > 0) {
+              if (p >= 50) {
                 extractedPrice = p;
                 break;
               }
@@ -529,7 +553,7 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
         } catch {}
       });
 
-      if (extractedPrice > 0) return extractedPrice;
+      if (extractedPrice >= 50) return extractedPrice;
 
       // 2. OpenGraph Meta Tags
       const metaP = $('meta[property="product:price:amount"]').attr('content') ||
@@ -537,7 +561,7 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
                     $('meta[name="price"]').attr('content');
       if (metaP) {
         const parsed = parseTurkishPrice(metaP);
-        if (parsed > 0) return parsed;
+        if (parsed >= 50) return parsed;
       }
 
       // 3. Cheerio DOM Selectors for Trendyol & Hepsiburada
@@ -551,7 +575,7 @@ async function fetchLiveProductPagePrice(productUrl: string): Promise<number> {
         const txt = $(sel).first().text().trim();
         if (txt) {
           const parsed = parseTurkishPrice(txt);
-          if (parsed > 0) return parsed;
+          if (parsed >= 50) return parsed;
         }
       }
     }
@@ -600,8 +624,7 @@ async function fetchLiveTrendyolProductDetailUrls(cleanSearchTerm: string): Prom
           const cleanTitle = titleText.replace(/\s*\|\s*Trendyol.*$/i, '').trim() || `Kadın ${cleanSearchTerm}`;
 
           if (!items.some(i => i.product_url === rawHref)) {
-            const priceMatch = snippetText.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+)\s*(?:TL|₺)/i);
-            let priceVal = priceMatch ? parseTurkishPrice(priceMatch[1]) : 0;
+            const priceVal = parseTurkishPrice(snippetText);
 
             items.push({
               marketplace_name: 'Trendyol',
@@ -775,12 +798,12 @@ export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInf
 
   const allRawItems = [...trendyolItems.slice(0, 5), ...hbItems.slice(0, 5)];
 
-  // 3. ENRICH PRICES IN PARALLEL: Fetch Live Product Page Selling Price for any item with missing price
+  // 3. ENRICH PRICES IN PARALLEL: Fetch Live Product Page Selling Price for any item with missing price (< 50 TL)
   const enrichedItems = await Promise.all(allRawItems.map(async (item) => {
-    if (item.price > 0) return item;
+    if (item.price >= 50) return item;
 
     const livePrice = await fetchLiveProductPagePrice(item.product_url);
-    if (livePrice > 0) {
+    if (livePrice >= 50) {
       return { ...item, price: livePrice };
     }
 
