@@ -835,45 +835,54 @@ export default function AdminSuppliersPage() {
               <div className="bg-white border border-gray-200 rounded-xs overflow-hidden shadow-xs">
                 <div className="p-4 border-b border-gray-200 font-bold text-xs text-[#1A1A1A] flex items-center justify-between">
                   <span>Tespit Edilen Benzer Satıcı Ürünleri ({competitorAnalysis.items?.length || 0})</span>
-                  <span className="text-[11px] text-emerald-700 font-semibold">✓ Tam 8 Ürün (2 Koton + 2 Penti + 2 Beymen + 2 Zara - Her Tıklamada Farklı Canlı Ürünler)</span>
+                  <span className="text-[11px] text-emerald-700 font-semibold">✓ Koton + Penti + Zara %100 Birebir Ürün İsim & Kumaş Bilgisi Taraması</span>
                 </div>
 
-                <div className="divide-y divide-gray-100">
-                  {competitorAnalysis.items?.map((item: any, idx: number) => (
-                    <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                          item.marketplace_name.includes('Koton') ? 'bg-red-100 text-red-900 border border-red-300' :
-                          item.marketplace_name.includes('Penti') ? 'bg-pink-100 text-pink-900 border border-pink-300' :
-                          item.marketplace_name.includes('Beymen') ? 'bg-slate-900 text-[#C5A572] border border-[#C5A572]' :
-                          'bg-black text-white border border-gray-700 font-bold tracking-wider'
-                        }`}>
-                          {item.marketplace_name}
-                        </span>
-                        <div>
-                          <h4 className="font-semibold text-xs text-[#1A1A1A]">{item.product_title}</h4>
-                          {item.fabric_match && (
-                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 inline-block mt-0.5">
-                              ✓ {item.fabric_match}
-                            </span>
-                          )}
+                {competitorAnalysis.items?.length === 0 ? (
+                  <div className="p-8 text-center bg-amber-50/60 border border-amber-200 rounded-xs space-y-1.5 my-4 mx-4">
+                    <AlertCircle className="w-6 h-6 text-amber-600 mx-auto" />
+                    <h4 className="font-bold text-amber-900 text-xs">Aranan Ürün İsmi ve Kumaş Bilgisine %100 Uyan Rakip Ürün Bulunamadı</h4>
+                    <p className="text-[11px] text-amber-700 font-medium">
+                      Aradığınız ürün adında ve kumaş tipinde ("Saten", "Keten", "Pamuk", "Deri", "Triko" vb.) diğer mağazalarda birebir eşleşen ürün bulunamadığı için istenildiği gibi alakasız ürün gösterilmemektedir.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {competitorAnalysis.items?.map((item: any, idx: number) => (
+                      <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            item.marketplace_name.includes('Koton') ? 'bg-red-100 text-red-900 border border-red-300' :
+                            item.marketplace_name.includes('Penti') ? 'bg-pink-100 text-pink-900 border border-pink-300' :
+                            'bg-black text-white border border-gray-700 font-bold tracking-wider'
+                          }`}>
+                            {item.marketplace_name}
+                          </span>
+                          <div>
+                            <h4 className="font-semibold text-xs text-[#1A1A1A]">{item.product_title}</h4>
+                            {item.fabric_match && (
+                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 inline-block mt-0.5">
+                                ✓ {item.fabric_match}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <span className="font-bold text-sm text-[#1A1A1A]">{formatPrice(item.price)}</span>
+                          <a
+                            href={item.product_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-[#1A1A1A] hover:bg-[#C5A572] text-white rounded-xs text-[11px] font-semibold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <ExternalLink size={12} /> Ürünü Gör ➔
+                          </a>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-4">
-                        <span className="font-bold text-sm text-[#1A1A1A]">{formatPrice(item.price)}</span>
-                        <a
-                          href={item.product_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 bg-[#1A1A1A] hover:bg-[#C5A572] text-white rounded-xs text-[11px] font-semibold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                        >
-                          <ExternalLink size={12} /> Ürünü Gör ➔
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

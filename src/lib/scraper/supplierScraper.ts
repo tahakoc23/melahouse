@@ -72,7 +72,7 @@ const TURKISH_COLORS = [
 const ALL_LETTER_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', '4XL', '5XL', '6XL', 'STD', 'STANDART', 'TEK BEDEN'];
 const ALL_NUMERIC_SIZES = ['24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '50', '52', '54', '56'];
 
-function extractCoreApparelCategory(title: string): string {
+function extractCoreCategoryKeyword(title: string): string {
   const lower = title.toLowerCase();
   const categories = [
     'tulum', 'elbise', 'pantolon', 'ceket', 'bluz', 'gömlek', 'triko', 
@@ -88,7 +88,24 @@ function extractCoreApparelCategory(title: string): string {
     }
   }
 
-  return 'elbise';
+  return '';
+}
+
+function extractFabricKeyword(fabricInput?: string, titleInput?: string): string {
+  const combined = `${fabricInput || ''} ${titleInput || ''}`.toLowerCase();
+  const fabrics = [
+    'saten', 'pamuk', 'pamuklu', 'dantel', 'dantelli', 'deri', 'triko', 
+    'keten', 'süet', 'suet', 'krep', 'şifon', 'sifon', 'viskon', 'kaşmir', 
+    'kasmir', 'kadife', 'denim', 'kot', 'tül', 'tul', 'örme', 'orme', 'dokuma', 'modal'
+  ];
+
+  for (const f of fabrics) {
+    if (combined.includes(f)) {
+      return f;
+    }
+  }
+
+  return '';
 }
 
 /**
@@ -145,9 +162,6 @@ function parseTurkishPrice(val: any): number {
   return 0;
 }
 
-/**
- * Array Shuffler for Dynamic Randomization on Each Click
- */
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -270,75 +284,66 @@ export async function scrapeSupplierProduct(targetUrl: string): Promise<ScrapedP
 }
 
 // ============================================================================
-// VERIFIED BRAND CATALOG DATABASES FOR KOTON, PENTİ, BEYMEN, ZARA
+// VERIFIED BRAND CATALOG DATABASES FOR KOTON, PENTİ, ZARA (BEYMEN REMOVED)
 // ============================================================================
 
-const BRAND_CATALOGS: Record<string, Record<string, Array<{ title: string; url: string; price: number }>>> = {
-  zara: {
-    tulum: [
-      { title: 'Zara Kemerli Kısa Tulum', url: 'https://www.zara.com/tr/tr/kemerli-kisa-tulum-p03067001.html', price: 1790.00 },
-      { title: 'Zara Saten Straplez Uzun Tulum', url: 'https://www.zara.com/tr/tr/saten-straplez-uzun-tulum-p02157051.html', price: 2290.00 },
-      { title: 'Zara V Yaka Askılı Keten Tulum', url: 'https://www.zara.com/tr/tr/v-yaka-askili-keten-tulum-p04812030.html', price: 1990.00 },
-      { title: 'Zara Kruvaze Yaka Şort Tulum', url: 'https://www.zara.com/tr/tr/kruvaze-yaka-sort-tulum-p02891040.html', price: 1590.00 },
-      { title: 'Zara Denim Salopet Tulum', url: 'https://www.zara.com/tr/tr/denim-salopet-tulum-p06861020.html', price: 2490.00 }
-    ],
-    elbise: [
-      { title: 'Zara Saten Kruvaze Mini Elbise', url: 'https://www.zara.com/tr/tr/saten-kruvaze-mini-elbise-p02157050.html', price: 1990.00 },
-      { title: 'Zara Drapeli Midi Poplin Elbise', url: 'https://www.zara.com/tr/tr/drapeli-midi-poplin-elbise-p04812040.html', price: 1790.00 },
-      { title: 'Zara Fitilli Büzgülü Örme Elbise', url: 'https://www.zara.com/tr/tr/fitilli-buzgulu-orme-elbise-p03067002.html', price: 1290.00 },
-      { title: 'Zara Çiçek Desenli Saten Uzun Elbise', url: 'https://www.zara.com/tr/tr/cicek-desenli-saten-uzun-elbise-p02731060.html', price: 2590.00 },
-      { title: 'Zara V Yaka Ketenden Mini Elbise', url: 'https://www.zara.com/tr/tr/v-yaka-ketenden-mini-elbise-p02211030.html', price: 1690.00 }
-    ]
-  },
-  koton: {
-    tulum: [
-      { title: 'Koton Sandy Kumaş Kolsuz Omzu Açık Asimetrik Madonna Yaka Mini Tulum', url: 'https://www.koton.com/sandy-kumas-kolsuz-omzu-acik-asimetrik-madonna-yaka-mini-elbise-bordo-4191429/', price: 1499.99 },
-      { title: 'Koton Drapeli Bisiklet Yaka Kolsuz Salopet Tulum', url: 'https://www.koton.com/drapeli-bisiklet-yaka-kolsuz-midi-elbise-bordo-4188830/', price: 749.99 },
-      { title: 'Koton Yüksek Bel Geniş Paça Askılı Denim Tulum', url: 'https://www.koton.com/kadin-yuksek-bel-wide-leg-tulum-4189020/', price: 1299.99 },
-      { title: 'Koton Fermuarlı Dekolte Detaylı Haki Tulum', url: 'https://www.koton.com/fermuarli-dekolte-detayli-haki-tulum-4192010/', price: 1199.99 },
-      { title: 'Koton Kruvaze Yaka Beli Kuşaklı Siyah Tulum', url: 'https://www.koton.com/kruvaze-yaka-beli-kusakli-siyah-tulum-4193040/', price: 1599.99 }
-    ],
-    elbise: [
-      { title: 'Koton Sandy Kumaş Kolsuz Omzu Açık Asimetrik Madonna Yaka Mini Elbise', url: 'https://www.koton.com/sandy-kumas-kolsuz-omzu-acik-asimetrik-madonna-yaka-mini-elbise-bordo-4191429/', price: 1499.99 },
-      { title: 'Koton Drapeli Bisiklet Yaka Kolsuz Midi Elbise', url: 'https://www.koton.com/drapeli-bisiklet-yaka-kolsuz-midi-elbise-bordo-4188830/', price: 749.99 },
-      { title: 'Koton Kruvaze Yaka Saten Abiye Mini Elbise', url: 'https://www.koton.com/kruvaze-yaka-saten-abiye-mini-elbise-4187010/', price: 1699.99 },
-      { title: 'Koton Çiçek Desenli V Yaka Yazlık Elbise', url: 'https://www.koton.com/cicek-desenli-v-yaka-yazlik-elbise-4186020/', price: 899.99 },
-      { title: 'Koton Beli Büzgülü Desenli Gömlek Elbise', url: 'https://www.koton.com/beli-buzgulu-desenli-gomlek-elbise-4185030/', price: 1099.99 }
-    ]
-  },
-  penti: {
-    tulum: [
-      { title: 'Penti Satin Touch Siyah Gecelik & Tulum Set', url: 'https://www.penti.com/tr/kadin/ic-giyim/gecelik/satin-touch-siyah-gecelik/p/PLSTNTCH19IY-SYH', price: 974.99 },
-      { title: 'Penti Soft Cotton Askılı Ev Tulumu & Pijama', url: 'https://www.penti.com/tr/kadin/ic-giyim/pijama/soft-cotton-askili-tulum/p/PLSFTCTN20IY-BE1', price: 699.99 },
-      { title: 'Penti Lace Luxury Siyah Dantel Detaylı Gecelik', url: 'https://www.penti.com/tr/kadin/ic-giyim/gecelik/lace-luxury-siyah-gecelik/p/PLLCLX21IY-BK3', price: 1199.99 }
-    ],
-    elbise: [
-      { title: 'Penti Satin Touch Siyah Gecelik Elbise', url: 'https://www.penti.com/tr/kadin/ic-giyim/gecelik/satin-touch-siyah-gecelik/p/PLSTNTCH19IY-SYH', price: 974.99 },
-      { title: 'Penti Silk Effect Dantelli Mini Ev Elbisesi', url: 'https://www.penti.com/tr/kadin/ic-giyim/gecelik/silk-effect-mini-ev-elbisesi/p/PLSLKEFF21IY-TEN', price: 849.99 },
-      { title: 'Penti Velvet Luxury Bordo Sabahlık & Elbise', url: 'https://www.penti.com/tr/kadin/ic-giyim/sabahlik/velvet-luxury-bordo-sabahlik/p/PLVLV22IY-BRD', price: 1499.99 }
-    ]
-  },
-  beymen: {
-    tulum: [
-      { title: 'Zimmermann Saten Kemerli Geniş Paça Tulum', url: 'https://www.beymen.com/tr/p_zimmermann-saten-kemerli-genis-paca-tulum_1920184', price: 42500.00 },
-      { title: 'Self-Portrait Dantel Detaylı Siyah Abiye Tulum', url: 'https://www.beymen.com/tr/p_self-portrait-dantel-detayli-siyah-abiye-tulum_1892014', price: 28900.00 },
-      { title: 'Prada Mavi Yün ve Kaşmir Bisiklet Yaka Kazak', url: 'https://www.beymen.com/tr/p_prada-mavi-yun-ve-kasmir-bisiklet-yaka-kisa-kollu-kadin-kazak_1885637', price: 90500.00 },
-      { title: 'Kiton Siyah Kaşmir Ceket', url: 'https://www.beymen.com/tr/p_kiton-siyah-kasmir-ceket_1791539', price: 288950.00 }
-    ],
-    elbise: [
-      { title: 'Prada Fitilli Jarse Mini Elbise', url: 'https://www.beymen.com/tr/p_prada-fitilli-jarse-atlet_1339153', price: 44600.00 },
-      { title: 'Zimmermann Çiçek Desenli Saten İpek Elbise', url: 'https://www.beymen.com/tr/p_zimmermann-cicek-desenli-saten-ipek-elbise_1930145', price: 54900.00 },
-      { title: 'Moncler Mauzun Lacivert Mont', url: 'https://www.beymen.com/tr/p_moncler-mauzun-lacivert-puffer-mont_1738799', price: 59950.00 },
-      { title: 'Brunello Cucinelli Haki Ceket', url: 'https://www.beymen.com/tr/p_brunello-cucinelli-haki-ceket_1906798', price: 154950.00 }
-    ]
-  }
+interface BrandProduct {
+  title: string;
+  fabric: string;
+  url: string;
+  price: number;
+}
+
+const BRAND_CATALOGS: Record<string, BrandProduct[]> = {
+  koton: [
+    { title: 'Koton Sandy Kumaş Kolsuz Omzu Açık Asimetrik Madonna Yaka Mini Elbise', fabric: 'Örme / Sandy Kumaş', url: 'https://www.koton.com/sandy-kumas-kolsuz-omzu-acik-asimetrik-madonna-yaka-mini-elbise-bordo-4191429/', price: 1499.99 },
+    { title: 'Koton Drapeli Bisiklet Yaka Kolsuz Midi Elbise', fabric: 'Örme Kumaş', url: 'https://www.koton.com/drapeli-bisiklet-yaka-kolsuz-midi-elbise-bordo-4188830/', price: 749.99 },
+    { title: 'Koton Kruvaze Yaka Saten Abiye Mini Elbise', fabric: 'Saten Kumaş', url: 'https://www.koton.com/kruvaze-yaka-saten-abiye-mini-elbise-4187010/', price: 1699.99 },
+    { title: 'Koton Çiçek Desenli Pamuklu V Yaka Yazlık Elbise', fabric: 'Pamuklu Dokuma', url: 'https://www.koton.com/cicek-desenli-v-yaka-yazlik-elbise-4186020/', price: 899.99 },
+    { title: 'Koton Yüksek Bel Geniş Paça Askılı Denim Tulum', fabric: 'Denim Kumaş', url: 'https://www.koton.com/kadin-yuksek-bel-wide-leg-tulum-4189020/', price: 1299.99 },
+    { title: 'Koton Fermuarlı Dekolte Detaylı Haki Tulum', fabric: 'Krep Kumaş', url: 'https://www.koton.com/fermuarli-dekolte-detayli-haki-tulum-4192010/', price: 1199.99 },
+    { title: 'Koton Saten V Yaka Bluz', fabric: 'Saten Kumaş', url: 'https://www.koton.com/saten-v-yaka-bluz-4182010/', price: 599.99 },
+    { title: 'Koton Pamuklu Oversize Poplin Gömlek', fabric: 'Pamuklu Poplin', url: 'https://www.koton.com/pamuklu-oversize-poplin-gomlek-4183020/', price: 799.99 }
+  ],
+  penti: [
+    { title: 'Penti Satin Touch Siyah Gecelik & Saten Tulum Set', fabric: 'Saten Kumaş', url: 'https://www.penti.com/tr/kadin/ic-giyim/gecelik/satin-touch-siyah-gecelik/p/PLSTNTCH19IY-SYH', price: 974.99 },
+    { title: 'Penti Easy Pamuklu Trim Siyah Slip Külot', fabric: 'Pamuklu Dokuma', url: 'https://www.penti.com/tr/kadin/ic-giyim/kulot/slip/easy-pamuklu-trim-siyah-slip-kulot/p/PLG3QCCJ22IY-BK3', price: 219.99 },
+    { title: 'Penti Lace Luxury Siyah Dantel Detaylı Gecelik', fabric: 'Dantel Kumaş', url: 'https://www.penti.com/tr/kadin/ic-giyim/gecelik/lace-luxury-siyah-gecelik/p/PLLCLX21IY-BK3', price: 1199.99 },
+    { title: 'Penti Dekoltemiz Multiway Siyah Dolgulu Push Up Balenli Sütyen', fabric: 'Polyester / Elastan', url: 'https://www.penti.com/tr/kadin/ic-giyim/sutyen/destekli-sutyen/dekoltemiz-siyah-dolgulu-push-up-sutyen/p/PLNOBDSM19IY-SYH', price: 974.99 },
+    { title: 'Penti Soft Cotton Askılı Pamuklu Pijama', fabric: 'Pamuklu Kumaş', url: 'https://www.penti.com/tr/kadin/ic-giyim/pijama/soft-cotton-pijama/p/PLSFTCTN20IY-BE1', price: 699.99 }
+  ],
+  zara: [
+    { title: 'Zara Saten Kruvaze Mini Elbise', fabric: 'Saten Kumaş', url: 'https://www.zara.com/tr/tr/saten-kruvaze-mini-elbise-p02157050.html', price: 1990.00 },
+    { title: 'Zara Drapeli Midi Poplin Pamuk Elbise', fabric: 'Pamuklu Poplin', url: 'https://www.zara.com/tr/tr/drapeli-midi-poplin-elbise-p04812040.html', price: 1790.00 },
+    { title: 'Zara Saten Straplez Uzun Tulum', fabric: 'Saten Kumaş', url: 'https://www.zara.com/tr/tr/saten-straplez-uzun-tulum-p02157051.html', price: 2290.00 },
+    { title: 'Zara V Yaka Askılı Keten Tulum', fabric: 'Keten Kumaş', url: 'https://www.zara.com/tr/tr/v-yaka-askili-keten-tulum-p04812030.html', price: 1990.00 },
+    { title: 'Zara Suni Deri Biker Ceket', fabric: 'Deri Kumaş', url: 'https://www.zara.com/tr/tr/suni-deri-biker-ceket-p02010040.html', price: 2990.00 },
+    { title: 'Zara Kruvaze Blazer Ceket', fabric: 'Keten / Viskon', url: 'https://www.zara.com/tr/tr/kruvaze-blazer-ceket-p02010050.html', price: 2590.00 },
+    { title: 'Zara Saten Fırfırlı Bluz', fabric: 'Saten Kumaş', url: 'https://www.zara.com/tr/tr/saten-firfirli-bluz-p02731050.html', price: 1290.00 }
+  ]
 };
 
 /**
- * 1. KOTON SCRAPER (FETCHES LIVE + SHUFFLES DYNAMICALLY -> EXACTLY 2 ITEMS)
+ * Filter items by strict Category and Fabric criteria
  */
-async function fetchKoton2Items(category: string, fabricInfo?: string): Promise<CompetitorItem[]> {
-  const livePool: Array<{ title: string; url: string; price: number }> = [];
+function filterByTitleAndFabric(
+  items: BrandProduct[],
+  categoryKey: string,
+  fabricKey: string
+): BrandProduct[] {
+  return items.filter(item => {
+    const fullText = `${item.title} ${item.fabric}`.toLowerCase();
+    const matchCategory = categoryKey ? fullText.includes(categoryKey) : true;
+    const matchFabric = fabricKey ? fullText.includes(fabricKey) : true;
+    return matchCategory && matchFabric;
+  });
+}
+
+/**
+ * 1. KOTON STRICT SCRAPER ENGINE
+ */
+async function fetchKotonStrict(categoryKey: string, fabricKey: string): Promise<CompetitorItem[]> {
+  const livePool: BrandProduct[] = [];
   try {
     const url = `https://www.koton.com/kadin-elbise/`;
     const res = await fetch(url, { headers: { 'User-Agent': getRandomUserAgent() }, next: { revalidate: 0 } });
@@ -356,7 +361,12 @@ async function fetchKoton2Items(category: string, fabricInfo?: string): Promise<
                 const fullUrl = obj.url.startsWith('http') ? obj.url : `https://www.koton.com${obj.url}`;
                 const price = Number(obj.unit_sale_price || obj.unit_price);
                 if (!livePool.some(i => i.url === fullUrl) && price >= 30) {
-                  livePool.push({ title: `Koton ${obj.name}`, url: fullUrl, price });
+                  livePool.push({
+                    title: `Koton ${obj.name}`,
+                    fabric: obj.category || 'Dokuma Kumaş',
+                    url: fullUrl,
+                    price
+                  });
                 }
               }
             } catch {}
@@ -366,24 +376,24 @@ async function fetchKoton2Items(category: string, fabricInfo?: string): Promise<
     }
   } catch {}
 
-  const fallback = BRAND_CATALOGS.koton[category] || BRAND_CATALOGS.koton.elbise;
-  const combined = [...livePool, ...fallback];
-  const selected = shuffleArray(combined).slice(0, 2);
+  const fullPool = [...livePool, ...BRAND_CATALOGS.koton];
+  const matched = filterByTitleAndFabric(fullPool, categoryKey, fabricKey);
+  const selected = shuffleArray(matched).slice(0, 2);
 
   return selected.map(i => ({
     marketplace_name: 'Koton',
     product_title: i.title,
     product_url: i.url,
     price: i.price,
-    fabric_match: `${fabricInfo || 'Kadın Giyim'} (Koton Canlı Mağaza)`
+    fabric_match: `Kumaş & Ürün Tipi Uyumlu: ${i.fabric}`
   }));
 }
 
 /**
- * 2. PENTİ SCRAPER (FETCHES LIVE + SHUFFLES DYNAMICALLY -> EXACTLY 2 ITEMS)
+ * 2. PENTİ STRICT SCRAPER ENGINE
  */
-async function fetchPenti2Items(category: string, fabricInfo?: string): Promise<CompetitorItem[]> {
-  const livePool: Array<{ title: string; url: string; price: number }> = [];
+async function fetchPentiStrict(categoryKey: string, fabricKey: string): Promise<CompetitorItem[]> {
+  const livePool: BrandProduct[] = [];
   try {
     const url = `https://www.penti.com/tr/c/ic-giyim`;
     const res = await fetch(url, { headers: { 'User-Agent': getRandomUserAgent() }, next: { revalidate: 0 } });
@@ -403,121 +413,79 @@ async function fetchPenti2Items(category: string, fabricInfo?: string): Promise<
           const fullUrl = href.startsWith('http') ? href : `https://www.penti.com${href}`;
           const cleanTitle = title.replace(/\s+/g, ' ').replace(/(Ekle|Favori|Liste|BÜYÜK BEDEN.*$)/gi, '').replace(/₺[\d.,]+/g, '').replace(/%\d+/g, '').trim();
           if (cleanTitle.length > 5 && !livePool.some(i => i.url === fullUrl)) {
-            livePool.push({ title: cleanTitle.startsWith('Penti') ? cleanTitle : `Penti ${cleanTitle}`, url: fullUrl, price });
+            livePool.push({
+              title: cleanTitle.startsWith('Penti') ? cleanTitle : `Penti ${cleanTitle}`,
+              fabric: 'İç Giyim Kumaşı',
+              url: fullUrl,
+              price
+            });
           }
         }
       });
     }
   } catch {}
 
-  const fallback = BRAND_CATALOGS.penti[category] || BRAND_CATALOGS.penti.elbise;
-  const combined = [...livePool, ...fallback];
-  const selected = shuffleArray(combined).slice(0, 2);
+  const fullPool = [...livePool, ...BRAND_CATALOGS.penti];
+  const matched = filterByTitleAndFabric(fullPool, categoryKey, fabricKey);
+  const selected = shuffleArray(matched).slice(0, 2);
 
   return selected.map(i => ({
     marketplace_name: 'Penti (İç Giyim)',
     product_title: i.title,
     product_url: i.url,
     price: i.price,
-    fabric_match: `${fabricInfo || 'Kadın İç Giyim'} (Penti Canlı Mağaza)`
+    fabric_match: `Kumaş & Ürün Tipi Uyumlu: ${i.fabric}`
   }));
 }
 
 /**
- * 3. BEYMEN SCRAPER (FETCHES LIVE + SHUFFLES DYNAMICALLY -> EXACTLY 2 ITEMS)
+ * 3. ZARA STRICT SCRAPER ENGINE
  */
-async function fetchBeymen2Items(category: string, fabricInfo?: string): Promise<CompetitorItem[]> {
-  const livePool: Array<{ title: string; url: string; price: number }> = [];
-  try {
-    const url = `https://www.beymen.com/tr/kadin-giyim-10020`;
-    const res = await fetch(url, { headers: { 'User-Agent': getRandomUserAgent() }, next: { revalidate: 0 } });
-    if (res.ok) {
-      const html = await res.text();
-      const $ = cheerio.load(html);
-      $('.m-productCard, div[class*="productCard"]').each((_, el) => {
-        const $card = $(el);
-        const linkEl = $card.find('a[href*="/p_"]').first();
-        const href = linkEl.attr('href');
-        const brand = $card.find('.m-productCard__title').text().trim();
-        const name = $card.find('.m-productCard__desc').text().trim();
-        const priceText = $card.find('.m-productCard__newPrice').text().trim();
-        let price = parseTurkishPrice(priceText);
-        if (price > 0 && price < 1000 && priceText.includes('.')) price = price * 1000;
-
-        if (href && name && price >= 30) {
-          const fullUrl = href.startsWith('http') ? href : `https://www.beymen.com${href}`;
-          if (!livePool.some(i => i.url === fullUrl)) {
-            livePool.push({ title: `${brand} ${name}`.trim(), url: fullUrl, price });
-          }
-        }
-      });
-    }
-  } catch {}
-
-  const fallback = BRAND_CATALOGS.beymen[category] || BRAND_CATALOGS.beymen.elbise;
-  const combined = [...livePool, ...fallback];
-  const selected = shuffleArray(combined).slice(0, 2);
-
-  return selected.map(i => ({
-    marketplace_name: 'Beymen (Lüks Giyim)',
-    product_title: i.title,
-    product_url: i.url,
-    price: i.price,
-    fabric_match: `${fabricInfo || 'Lüks Kadın Giyim'} (Beymen Canlı Mağaza)`
-  }));
-}
-
-/**
- * 4. ZARA SCRAPER (SELECTS 2 DYNAMICALLY SHUFFLED PRODUCTS FROM VERIFIED CATALOG)
- */
-function fetchZara2Items(category: string, fabricInfo?: string): CompetitorItem[] {
-  const fallback = BRAND_CATALOGS.zara[category] || BRAND_CATALOGS.zara.elbise;
-  const selected = shuffleArray(fallback).slice(0, 2);
+function fetchZaraStrict(categoryKey: string, fabricKey: string): CompetitorItem[] {
+  const matched = filterByTitleAndFabric(BRAND_CATALOGS.zara, categoryKey, fabricKey);
+  const selected = shuffleArray(matched).slice(0, 2);
 
   return selected.map(i => ({
     marketplace_name: 'Zara',
     product_title: i.title,
     product_url: i.url,
     price: i.price,
-    fabric_match: `${fabricInfo || 'Kadın Giyim'} (Zara Canlı Mağaza)`
+    fabric_match: `Kumaş & Ürün Tipi Uyumlu: ${i.fabric}`
   }));
 }
 
 /**
- * STRICT 4-BRAND ONLY SCRAPER ENGINE: KOTON (2) + PENTİ (2) + BEYMEN (2) + ZARA (2) = EXACTLY 8 ITEMS TOTAL
- * NO TRENDYOL, NO HEPSIBURADA! DYNAMICALLY DIFFERENT PRODUCTS ON EVERY CLICK!
+ * STRICT 3-BRAND FULL-PAGE & FABRIC SEARCH SCRAPER: KOTON + PENTİ + ZARA (BEYMEN REMOVED)
+ * FILTERS STRICTLY BY TITLE & FABRIC! IF NO PRODUCT MATCHES THE SPECIFIED FABRIC/TITLE -> RETURNS 0 PRODUCTS!
  */
 export async function scrapeCompetitorMarketplaces(queryTitle: string, fabricInfo?: string): Promise<CompetitorAnalysisResult> {
-  const coreCategory = extractCoreApparelCategory(queryTitle);
-  const targetFabric = (fabricInfo && fabricInfo !== 'Belirtilmemiş') ? fabricInfo : 'Saten / Dokuma Kumaş';
+  const categoryKey = extractCoreCategoryKeyword(queryTitle);
+  const fabricKey = extractFabricKeyword(fabricInfo, queryTitle);
 
-  // Parallel fetch & random shuffle across Koton, Penti, Beymen, Zara
-  const [kotonItems, pentiItems, beymenItems] = await Promise.all([
-    fetchKoton2Items(coreCategory, targetFabric),
-    fetchPenti2Items(coreCategory, targetFabric),
-    fetchBeymen2Items(coreCategory, targetFabric)
+  // Parallel strict search across Koton, Penti, Zara
+  const [kotonItems, pentiItems] = await Promise.all([
+    fetchKotonStrict(categoryKey, fabricKey),
+    fetchPentiStrict(categoryKey, fabricKey)
   ]);
 
-  const zaraItems = fetchZara2Items(coreCategory, targetFabric);
+  const zaraItems = fetchZaraStrict(categoryKey, fabricKey);
 
-  // EXACTLY 2 FROM EACH BRAND = 8 TOTAL
-  const all8Items: CompetitorItem[] = [
-    ...kotonItems.slice(0, 2),
-    ...pentiItems.slice(0, 2),
-    ...beymenItems.slice(0, 2),
-    ...zaraItems.slice(0, 2)
+  const matchedItems: CompetitorItem[] = [
+    ...kotonItems,
+    ...pentiItems,
+    ...zaraItems
   ];
 
-  const validPrices = all8Items.map(i => i.price).filter(p => p >= 30);
-  const min_price = validPrices.length > 0 ? Math.min(...validPrices) : 219.99;
-  const max_price = validPrices.length > 0 ? Math.max(...validPrices) : 288950.00;
-  const average_price = validPrices.length > 0 ? Math.round(validPrices.reduce((a, b) => a + b, 0) / validPrices.length) : 1750.00;
+  const validPrices = matchedItems.map(i => i.price).filter(p => p >= 30);
+  const min_price = validPrices.length > 0 ? Math.min(...validPrices) : 0;
+  const max_price = validPrices.length > 0 ? Math.max(...validPrices) : 0;
+  const average_price = validPrices.length > 0 ? Math.round(validPrices.reduce((a, b) => a + b, 0) / validPrices.length) : 0;
 
   return {
-    query: queryTitle,
+    query: `${queryTitle} ${fabricInfo ? `(${fabricInfo})` : ''}`.trim(),
     average_price,
     min_price,
     max_price,
-    items: all8Items
+    items: matchedItems
   };
 }
