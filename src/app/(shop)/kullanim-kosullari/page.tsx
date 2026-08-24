@@ -1,13 +1,13 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Kullanım Koşulları',
+  title: 'Kullanım Koşulları | MELA HOUSE',
   description: 'MELA HOUSE web sitesi kullanım şartları, fikri mülkiyet hakları ve alışveriş kuralları.',
 }
 
 export default function KullanimKosullariPage() {
   return (
-    <div className="bg-[#FAFAF8] text-[#1A1A1A] py-16 px-4 md:px-8 font-inter">
+    <div className="bg-[#FAFAF8] text-[#1A1A1A] pt-28 md:pt-36 pb-20 px-4 md:px-8 font-inter min-h-screen">
       <div className="max-w-4xl mx-auto space-y-8 bg-white p-8 md:p-12 rounded-lg shadow-sm border border-gray-200/80">
         
         <header className="border-b border-gray-200 pb-6">
@@ -20,7 +20,7 @@ export default function KullanimKosullariPage() {
         </header>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             1. Genel Şartlar
           </h2>
           <p>
@@ -29,7 +29,7 @@ export default function KullanimKosullariPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             2. Fikri ve Sınai Mülkiyet Hakları
           </h2>
           <p>
@@ -38,7 +38,7 @@ export default function KullanimKosullariPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             3. Ürün Bilgileri ve Fiyatlandırma
           </h2>
           <p>
@@ -47,7 +47,7 @@ export default function KullanimKosullariPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             4. İletişim
           </h2>
           <p>

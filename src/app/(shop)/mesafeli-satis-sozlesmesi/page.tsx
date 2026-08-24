@@ -1,13 +1,13 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Mesafeli Satış Sözleşmesi',
+  title: 'Mesafeli Satış Sözleşmesi | MELA HOUSE',
   description: 'MELA HOUSE 6502 sayılı Tüketicinin Korunması Hakkında Kanun uyarınca Mesafeli Satış Sözleşmesi.',
 }
 
 export default function MesafeliSatisSozlesmesiPage() {
   return (
-    <div className="bg-[#FAFAF8] text-[#1A1A1A] py-16 px-4 md:px-8 font-inter">
+    <div className="bg-[#FAFAF8] text-[#1A1A1A] pt-28 md:pt-36 pb-20 px-4 md:px-8 font-inter min-h-screen">
       <div className="max-w-4xl mx-auto space-y-8 bg-white p-8 md:p-12 rounded-lg shadow-sm border border-gray-200/80">
         
         <header className="border-b border-gray-200 pb-6">
@@ -20,7 +20,7 @@ export default function MesafeliSatisSozlesmesiPage() {
         </header>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             Madde 1 - Taraflar
           </h2>
           <p>
@@ -31,7 +31,7 @@ export default function MesafeliSatisSozlesmesiPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             Madde 2 - Sözleşmenin Konusu
           </h2>
           <p>
@@ -40,7 +40,7 @@ export default function MesafeliSatisSozlesmesiPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             Madde 3 - Cayma Hakkı
           </h2>
           <p>
@@ -52,7 +52,7 @@ export default function MesafeliSatisSozlesmesiPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             Madde 4 - Teslimat ve İade
           </h2>
           <p>

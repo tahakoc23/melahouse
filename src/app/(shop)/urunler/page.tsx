@@ -80,18 +80,33 @@ export default async function ProductsPage({
   // Filter Category / Subcategory
   if (resolvedParams.category) {
     const targetCat = normalizeSlug(String(resolvedParams.category));
-    list = list.filter(p => {
-      if (p.categories?.slug && normalizeSlug(p.categories.slug) === targetCat) return true;
-      if (p.category_slug && normalizeSlug(p.category_slug) === targetCat) return true;
-      if (p.parent_category && normalizeSlug(p.parent_category) === targetCat) return true;
-      if (Array.isArray(p.tags)) {
-        return p.tags.some((t: string) => {
-          const normTag = normalizeSlug(t);
-          return normTag === targetCat || targetCat.includes(normTag) || normTag.includes(targetCat);
-        });
-      }
-      return false;
-    });
+    if (targetCat === 'en-cok-satanlar' || targetCat === 'one-cikanlar') {
+      list = list.filter(p => p.is_featured === true);
+    } else {
+      list = list.filter(p => {
+        if (p.categories?.slug && normalizeSlug(p.categories.slug) === targetCat) return true;
+        if (p.category_slug && normalizeSlug(p.category_slug) === targetCat) return true;
+        if (p.parent_category && normalizeSlug(p.parent_category) === targetCat) return true;
+        if (Array.isArray(p.tags)) {
+          return p.tags.some((t: string) => {
+            const normTag = normalizeSlug(t);
+            return normTag === targetCat || targetCat.includes(normTag) || normTag.includes(targetCat);
+          });
+        }
+        return false;
+      });
+    }
+  }
+
+  // Filter / Sort En Çok Satanlar (is_featured)
+  if (resolvedParams.sort === 'en-cok-satan' || resolvedParams.filter === 'en-cok-satan') {
+    const featuredList = list.filter(p => p.is_featured === true);
+    // If featured items exist, filter by featured; otherwise place featured items at top
+    list = featuredList.length > 0 ? featuredList : [...list].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
+  } else if (resolvedParams.sort === 'fiyat-artan') {
+    list = [...list].sort((a, b) => Number(a.base_price || 0) - Number(b.base_price || 0));
+  } else if (resolvedParams.sort === 'fiyat-azalan') {
+    list = [...list].sort((a, b) => Number(b.base_price || 0) - Number(a.base_price || 0));
   }
 
   // Filter Color
@@ -113,7 +128,7 @@ export default async function ProductsPage({
   }
 
   return (
-    <div className="bg-[#FAFAF8] min-h-screen pt-32 md:pt-48">
+    <div className="bg-[#FAFAF8] min-h-screen pt-28 md:pt-36">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <div className="flex flex-col md:flex-row gap-8">
           <aside className="w-full md:w-64 flex-shrink-0">

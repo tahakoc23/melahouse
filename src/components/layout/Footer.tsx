@@ -65,9 +65,10 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/blog" className="hover:text-[#C5A572] transition-colors inline-block font-medium text-[#C5A572]/90">
-                  Blog &amp; Stil Rehberi (SEO)
+                  Stil Rehberi
                 </Link>
               </li>
+
             </ul>
           </div>
 

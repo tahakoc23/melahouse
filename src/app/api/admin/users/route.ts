@@ -59,36 +59,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Kullanıcı ID zorunludur." }, { status: 400 });
     }
 
-    // Update Auth user credentials (email/password) if provided
-    const authUpdatePayload: any = {};
-    if (email) authUpdatePayload.email = email;
-    if (password && password.trim() !== "") authUpdatePayload.password = password;
-    if (full_name) authUpdatePayload.user_metadata = { full_name };
+    // Call SECURITY DEFINER RPC admin_update_user
+    const { data, error } = await adminClient.rpc("admin_update_user", {
+      target_user_id: userId,
+      new_email: email || null,
+      new_password: password || null,
+      new_full_name: full_name || null,
+      new_role: role || null
+    });
 
-    if (Object.keys(authUpdatePayload).length > 0) {
-      const { error: authErr } = await adminClient.auth.admin.updateUserById(userId, authUpdatePayload);
-      if (authErr) {
-        console.error("Auth updateUserById error:", authErr);
-        return NextResponse.json({ error: authErr.message }, { status: 400 });
-      }
-    }
-
-    // Update public.profiles table
-    const profileUpdatePayload: any = {};
-    if (email) profileUpdatePayload.email = email;
-    if (full_name) profileUpdatePayload.full_name = full_name;
-    if (role) profileUpdatePayload.role = role;
-
-    if (Object.keys(profileUpdatePayload).length > 0) {
-      const { error: profileErr } = await adminClient
-        .from('profiles')
-        .update(profileUpdatePayload)
-        .eq('id', userId);
-
-      if (profileErr) {
-        console.error("Profile update error:", profileErr);
-        return NextResponse.json({ error: profileErr.message }, { status: 400 });
-      }
+    if (error || (data && data.success === false)) {
+      const errMsg = error?.message || data?.error || "Kullanıcı güncellenemedi.";
+      console.error("admin_update_user error:", errMsg);
+      return NextResponse.json({ error: errMsg }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, message: "Kullanıcı başarıyla güncellendi." });
@@ -109,17 +92,15 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Kullanıcı ID (userId) parametresi gereklidir." }, { status: 400 });
     }
 
-    // Delete linked profile & addresses first
-    await adminClient.from('addresses').delete().eq('user_id', userId);
-    await adminClient.from('wishlist').delete().eq('user_id', userId);
-    await adminClient.from('reviews').delete().eq('user_id', userId);
-    await adminClient.from('profiles').delete().eq('id', userId);
+    // Call SECURITY DEFINER RPC admin_delete_user
+    const { data, error } = await adminClient.rpc("admin_delete_user", {
+      target_user_id: userId
+    });
 
-    // Delete user from auth.users
-    const { error: authDeleteErr } = await adminClient.auth.admin.deleteUser(userId);
-    if (authDeleteErr) {
-      console.error("Auth deleteUser error:", authDeleteErr);
-      return NextResponse.json({ error: authDeleteErr.message }, { status: 400 });
+    if (error || (data && data.success === false)) {
+      const errMsg = error?.message || data?.error || "Kullanıcı silinemedi.";
+      console.error("admin_delete_user error:", errMsg);
+      return NextResponse.json({ error: errMsg }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, message: "Kullanıcı sistemden başarıyla silindi." });

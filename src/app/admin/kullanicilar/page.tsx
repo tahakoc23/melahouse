@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatPrice } from '@/lib/utils'
-import { Users, Search, Mail, Phone, MapPin, ShoppingBag, ShieldCheck, RefreshCw, X, Eye, Trash2, Edit3, Lock, Check } from 'lucide-react'
+import { Users, Search, Mail, Phone, MapPin, ShoppingBag, ShieldCheck, RefreshCw, X, Eye, Trash2, Edit3, Lock, Check, AlertTriangle } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -21,6 +21,10 @@ export default function AdminUsersPage() {
   const [editPassword, setEditPassword] = useState('')
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user')
   const [isSaving, setIsSaving] = useState(false)
+
+  // Delete User Confirmation Modal State
+  const [deletingUser, setDeletingUser] = useState<any | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const [toast, setToast] = useState<{ isOpen: boolean; type: 'success' | 'error'; title?: string; message: string }>({
     isOpen: false,
@@ -92,24 +96,26 @@ export default function AdminUsersPage() {
     }
   }
 
-  // Delete User
-  const handleDeleteUser = async (user: any) => {
-    if (!window.confirm(`${user.full_name || user.email} isimli kullanıcıyı sistemden kalıcı olarak silmek istediğinize emin misiniz?`)) {
-      return
-    }
+  // Confirm Delete User
+  const confirmDeleteUser = async () => {
+    if (!deletingUser) return
 
+    setIsDeleting(true)
     try {
-      const res = await fetch(`/api/admin/users?userId=${user.id}`, {
+      const res = await fetch(`/api/admin/users?userId=${deletingUser.id}`, {
         method: 'DELETE'
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Silme işlemi başarısız.')
 
       showToast('Kullanıcı sistemden başarıyla silindi.', 'success')
-      setUsers(prev => prev.filter(u => u.id !== user.id))
-      if (selectedUser?.id === user.id) setSelectedUser(null)
+      setUsers(prev => prev.filter(u => u.id !== deletingUser.id))
+      if (selectedUser?.id === deletingUser.id) setSelectedUser(null)
+      setDeletingUser(null)
     } catch (err: any) {
       showToast(err.message || 'Silme hatası.', 'error')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -307,7 +313,7 @@ export default function AdminUsersPage() {
                           <Edit3 size={14} />
                         </button>
                         <button
-                          onClick={() => handleDeleteUser(user)}
+                          onClick={() => setDeletingUser(user)}
                           className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-xs transition-colors cursor-pointer"
                           title="Kullanıcıyı Sil"
                         >
@@ -322,6 +328,49 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Centered Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deletingUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs font-inter text-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-lg border border-gray-200 max-w-md w-full p-6 space-y-4 shadow-2xl relative text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-2">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="font-playfair font-bold text-xl text-[#1A1A1A]">
+                Kullanıcıyı Sil
+              </h3>
+              <p className="text-gray-600 text-xs leading-relaxed">
+                <strong className="text-gray-900">{deletingUser.full_name || deletingUser.email}</strong> isimli kullanıcıyı sistemden kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+              </p>
+
+              <div className="flex justify-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletingUser(null)}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xs text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteUser}
+                  disabled={isDeleting}
+                  className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xs text-xs font-semibold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 transition-colors shadow-md"
+                >
+                  {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>Evet, Sil</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Edit User Modal */}
       <AnimatePresence>

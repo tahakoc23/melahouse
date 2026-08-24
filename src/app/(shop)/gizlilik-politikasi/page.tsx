@@ -1,13 +1,13 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Gizlilik Politikası ve KVKK Aydınlatma Metni',
+  title: 'Gizlilik Politikası ve KVKK Aydınlatma Metni | MELA HOUSE',
   description: 'MELA HOUSE Gizlilik Politikası, Kişisel Verilerin Korunması Kanunu (KVKK) ve Çerez Politikası hakkında detaylı bilgilendirme.',
 }
 
 export default function GizlilikPolitikasiPage() {
   return (
-    <div className="bg-[#FAFAF8] text-[#1A1A1A] py-16 px-4 md:px-8 font-inter">
+    <div className="bg-[#FAFAF8] text-[#1A1A1A] pt-28 md:pt-36 pb-20 px-4 md:px-8 font-inter min-h-screen">
       <div className="max-w-4xl mx-auto space-y-8 bg-white p-8 md:p-12 rounded-lg shadow-sm border border-gray-200/80">
         
         <header className="border-b border-gray-200 pb-6">
@@ -20,7 +20,7 @@ export default function GizlilikPolitikasiPage() {
         </header>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             1. Veri Sorumlusunun Kimliği
           </h2>
           <p>
@@ -29,7 +29,7 @@ export default function GizlilikPolitikasiPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             2. Toplanan Kişisel Veriler ve İşleme Amaçları
           </h2>
           <p>
@@ -37,7 +37,7 @@ export default function GizlilikPolitikasiPage() {
           </p>
           <ul className="list-disc pl-5 space-y-2 text-gray-600">
             <li><strong>Kimlik Bilgileri:</strong> Ad, soyad.</li>
-            <li><strong>İletişim Bilgileri:</strong> E-posta adresi (info@melahouse.net altyapısı), telefon numarası, teslimat ve fatura adresi.</li>
+            <li><strong>İletişim Bilgileri:</strong> E-posta adresi (info@melahouse.net), telefon numarası, teslimat ve fatura adresi.</li>
             <li><strong>Müşteri İşlem Bilgileri:</strong> Sipariş geçmişi, sepet bilgileri, ödeme durumu, talep ve şikayetler.</li>
             <li><strong>İşlem Güvenliği Bilgileri:</strong> IP adresi, log kayıtları, çerez (cookie) verileri.</li>
           </ul>
@@ -47,7 +47,7 @@ export default function GizlilikPolitikasiPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             3. Kişisel Verilerin Aktarılması
           </h2>
           <p>
@@ -56,7 +56,7 @@ export default function GizlilikPolitikasiPage() {
         </section>
 
         <section className="space-y-4 text-sm leading-relaxed text-gray-700">
-          <h2 className="font-playfair text-xl font-semibold text-[#1A1A1A] text-[#C5A572]">
+          <h2 className="font-playfair text-xl font-semibold text-[#C5A572]">
             4. KVKK Kapsamındaki Haklarınız (Madde 11)
           </h2>
           <p>
