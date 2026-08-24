@@ -4,7 +4,7 @@ import ProductGrid from '@/components/product/ProductGrid';
 import FilterSidebar from '@/components/product/FilterSidebar';
 
 export const metadata = {
-  title: 'Tüm Ürünler | Veloria',
+  title: 'Tüm Ürünler | MELA HOUSE',
 };
 
 const normalizeSlug = (str: string) => {

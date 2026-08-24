@@ -6,25 +6,25 @@ type JsonLdProps = {
 export default function JsonLd({ type, data }: JsonLdProps) {
   let schemaData = {};
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://veloria.com.tr';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://melahouse.net';
 
   if (type === 'organization') {
     schemaData = {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: 'Veloria',
+      name: 'MELA HOUSE',
       url: baseUrl,
       logo: `${baseUrl}/logo.png`,
       sameAs: [
-        'https://instagram.com/veloria.official',
+        'https://instagram.com/melahouse.official',
       ],
-      description: 'Veloria - Lüks Kadın Giyim Markası',
+      description: 'MELA HOUSE - Lüks Kadın Giyim Markası',
     };
   } else if (type === 'local_business') {
     schemaData = {
       '@context': 'https://schema.org',
       '@type': 'LocalBusiness',
-      name: 'Veloria',
+      name: 'MELA HOUSE',
       image: `${baseUrl}/logo.png`,
       '@id': baseUrl,
       url: baseUrl,

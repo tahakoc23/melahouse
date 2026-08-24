@@ -19,7 +19,7 @@ interface LookbookSectionProps {
 const DEFAULT_LOOKBOOK: LookbookContent = {
   title: 'Zamansız Zarafet',
   image_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop',
-  description: 'Veloria, saf ipek dokunuşları, kusursuz işçilik ve modern siluetlerle kadının gücünü ve zarafetini ortaya çıkarıyor. Her bir tasarım, zamana meydan okuyan benzersiz bir lüks deneyimi sunmak üzere özenle el işçiliğiyle hazırlandı.',
+  description: 'MELA HOUSE, saf ipek dokunuşları, kusursuz işçilik ve modern siluetlerle kadının gücünü ve zarafetini ortaya çıkarıyor. Her bir tasarım, zamana meydan okuyan benzersiz bir lüks deneyimi sunmak üzere özenle el işçiliğiyle hazırlandı.',
   link_url: '/hakkimizda'
 }
 

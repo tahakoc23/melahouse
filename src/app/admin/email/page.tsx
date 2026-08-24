@@ -11,12 +11,12 @@ const EMAIL_TEMPLATES = [
     id: 'tpl-1',
     name: 'Siparişiniz Başarıyla Alındı (Sipariş Onayı)',
     category: 'Sipariş Bildirimi',
-    subject: 'Siparişiniz Alındı — Veloria Lüks Kadın Giyim',
+    subject: 'Siparişiniz Alındı — MELA HOUSE Lüks Kadın Giyim',
     content: `
       <div style="background-color: #FAFAF8; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center;">
         <div style="max-w: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e5e5; border-radius: 4px; padding: 40px 30px; text-align: left;">
           <div style="text-align: center; border-bottom: 2px solid #C5A572; padding-bottom: 20px; margin-bottom: 30px;">
-            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; color: #1A1A1A; letter-spacing: 2px; margin: 0;">VELORIA</h1>
+            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; color: #1A1A1A; letter-spacing: 2px; margin: 0;">MELA HOUSE</h1>
             <p style="font-size: 11px; color: #C5A572; text-transform: uppercase; tracking: 3px; margin-top: 5px;">LÜKS KADIN GİYİM & İÇ GİYİM</p>
           </div>
           
@@ -32,11 +32,11 @@ const EMAIL_TEMPLATES = [
           </div>
 
           <div style="text-align: center; margin-top: 30px;">
-            <a href="https://veloria.com.tr/siparislerim" style="background-color: #1A1A1A; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 12px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 1px;">SİPARİŞİMİ TAKİP ET</a>
+            <a href="https://melahouse.net/siparislerim" style="background-color: #1A1A1A; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 12px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 1px;">SİPARİŞİMİ TAKİP ET</a>
           </div>
 
           <div style="border-t: 1px solid #eeeeee; margin-top: 40px; pt: 20px; text-align: center; font-size: 11px; color: #888888;">
-            <p>© 2026 Veloria Official. Tüm Hakları Saklıdır.</p>
+            <p>© 2026 MELA HOUSE Official. Tüm Hakları Saklıdır.</p>
           </div>
         </div>
       </div>
@@ -46,12 +46,12 @@ const EMAIL_TEMPLATES = [
     id: 'tpl-2',
     name: 'Kargonuz Yola Çıktı (Teslimat Bildirimi)',
     category: 'Kargo Bildirimi',
-    subject: 'Kargonuz Yola Çıktı! 🚚 — Veloria',
+    subject: 'Kargonuz Yola Çıktı! 🚚 — MELA HOUSE',
     content: `
       <div style="background-color: #FAFAF8; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center;">
         <div style="max-w: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e5e5; border-radius: 4px; padding: 40px 30px; text-align: left;">
           <div style="text-align: center; border-bottom: 2px solid #C5A572; padding-bottom: 20px; margin-bottom: 30px;">
-            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; color: #1A1A1A; letter-spacing: 2px; margin: 0;">VELORIA</h1>
+            <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; color: #1A1A1A; letter-spacing: 2px; margin: 0;">MELA HOUSE</h1>
           </div>
           
           <h2 style="font-size: 20px; color: #1A1A1A; font-weight: 600; margin-bottom: 15px;">Müjde! Paketinizi Yola Çıkardık 📦</h2>
@@ -65,7 +65,7 @@ const EMAIL_TEMPLATES = [
           </div>
 
           <div style="text-align: center; margin-top: 30px;">
-            <a href="https://veloria.com.tr/siparislerim" style="background-color: #C5A572; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 12px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 1px;">KARGOM NEREDE?</a>
+            <a href="https://melahouse.net/siparislerim" style="background-color: #C5A572; color: #ffffff; text-decoration: none; padding: 14px 30px; font-size: 12px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 1px;">KARGOM NEREDE?</a>
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ const EMAIL_TEMPLATES = [
     content: `
       <div style="background-color: #1A1A1A; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center; color: #ffffff;">
         <div style="max-w: 600px; margin: 0 auto; background-color: #242424; border: 1px solid #C5A572; border-radius: 4px; padding: 40px 30px; text-align: center;">
-          <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 32px; color: #C5A572; letter-spacing: 3px; margin: 0;">VELORIA</h1>
+          <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 32px; color: #C5A572; letter-spacing: 3px; margin: 0;">MELA HOUSE</h1>
           <p style="font-size: 11px; color: #cccccc; text-transform: uppercase; letter-spacing: 4px; margin-top: 10px;">ÖZEL SEZON FIRSATI</p>
           
           <div style="margin: 30px 0; padding: 25px; border-top: 1px solid #333333; border-bottom: 1px solid #333333;">
@@ -89,7 +89,7 @@ const EMAIL_TEMPLATES = [
           </div>
 
           <div style="text-align: center; margin-top: 30px;">
-            <a href="https://veloria.com.tr/urunler" style="background-color: #C5A572; color: #1A1A1A; text-decoration: none; padding: 16px 36px; font-size: 13px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 2px; text-transform: uppercase;">İNDİRİMLERİ İNCELE ↗</a>
+            <a href="https://melahouse.net/urunler" style="background-color: #C5A572; color: #1A1A1A; text-decoration: none; padding: 16px 36px; font-size: 13px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 2px; text-transform: uppercase;">İNDİRİMLERİ İNCELE ↗</a>
           </div>
         </div>
       </div>
@@ -99,11 +99,11 @@ const EMAIL_TEMPLATES = [
     id: 'tpl-4',
     name: 'Yeni Sezon Koleksiyon Lansmanı',
     category: 'Lansman Duyurusu',
-    subject: '🌸 Veloria 2026 İlkbahar & Yaz Koleksiyonu Yayında',
+    subject: '🌸 MELA HOUSE 2026 İlkbahar & Yaz Koleksiyonu Yayında',
     content: `
       <div style="background-color: #FAFAF8; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center;">
         <div style="max-w: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e5e5; border-radius: 4px; padding: 40px 30px; text-align: center;">
-          <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; color: #1A1A1A; letter-spacing: 2px; margin: 0;">VELORIA</h1>
+          <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; color: #1A1A1A; letter-spacing: 2px; margin: 0;">MELA HOUSE</h1>
           <p style="font-size: 11px; color: #C5A572; text-transform: uppercase; letter-spacing: 3px; margin-top: 8px;">YENİ SEZON LANSMANI</p>
           
           <h2 style="font-size: 22px; color: #1A1A1A; font-weight: 600; margin: 25px 0 15px 0; font-family: Georgia, serif;">Zamansız Zarafetin Yeni Yüzü</h2>
@@ -112,7 +112,7 @@ const EMAIL_TEMPLATES = [
           </p>
 
           <div style="text-align: center;">
-            <a href="https://veloria.com.tr/urunler" style="background-color: #1A1A1A; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 12px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 1px;">KOLEKSİYONA GÖZ AT</a>
+            <a href="https://melahouse.net/urunler" style="background-color: #1A1A1A; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 12px; font-weight: bold; border-radius: 2px; display: inline-block; letter-spacing: 1px;">KOLEKSİYONA GÖZ AT</a>
           </div>
         </div>
       </div>
@@ -168,7 +168,7 @@ export default function AdminEmailPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: recipientType === 'all' ? 'tum-uyeler@veloria.com.tr' : customEmail,
+          to: recipientType === 'all' ? 'tum-uyeler@melahouse.net' : customEmail,
           subject,
           html: htmlContent
         })

@@ -24,7 +24,7 @@ export default function AdminContentPage() {
     {
       id: 'slide-1',
       title: 'ZAMANSIZ LÜKS & İPEK KOLEKSİYONU',
-      subtitle: 'Veloria 2026 Özel Gece ve Abiye Tasarımları',
+      subtitle: 'MELA HOUSE 2026 Özel Gece ve Abiye Tasarımları',
       button_text: 'KOLEKSİYONU KEŞFET',
       button_link: '/urunler',
       media_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1600&auto=format&fit=crop'
@@ -34,13 +34,13 @@ export default function AdminContentPage() {
   // Announcement Bar State (Sitenin En Üst Duyuru Bantı)
   const [announcements, setAnnouncements] = useState<string[]>([
     'Ücretsiz Kargo — 1000 TL Üzeri Siparişlerde',
-    'Veloria Lüks Kadın Giyim — Yeni Sezon Koleksiyonu Yayında'
+    'MELA HOUSE Lüks Kadın Giyim — Yeni Sezon Koleksiyonu Yayında'
   ])
 
   // Lookbook State (Marka Hikayesi ve Editoryal Görsel)
   const [lookbook, setLookbook] = useState({
     title: 'İtalyan İpeği & El İşçiliği Zarafeti',
-    description: 'Veloria, her bir dikişinde yüksek terzilik sanatını ve zamansız kadın zarafetini buluşturuyor. Özel geceleriniz ve davetleriniz için tasarlanan siluetler...',
+    description: 'MELA HOUSE, her bir dikişinde yüksek terzilik sanatını ve zamansız kadın zarafetini buluşturuyor. Özel geceleriniz ve davetleriniz için tasarlanan siluetler...',
     button_text: 'HİKAYEMİZİ KEŞFET',
     button_link: '/hakkimizda',
     media_url: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1200&auto=format&fit=crop'
@@ -258,7 +258,7 @@ export default function AdminContentPage() {
                       newSlides[idx].subtitle = e.target.value
                       setSlides(newSlides)
                     }}
-                    placeholder="ör. Veloria 2026 Özel Gece Tasarımları"
+                    placeholder="ör. MELA HOUSE 2026 Özel Gece Tasarımları"
                     className="w-full p-2.5 border rounded-xs text-xs" 
                   />
                 </div>
@@ -365,7 +365,7 @@ export default function AdminContentPage() {
 
             <button
               type="button"
-              onClick={() => setAnnouncements([...announcements, "Yeni Sezon Fırsatları Veloria'da"])}
+              onClick={() => setAnnouncements([...announcements, "Yeni Sezon Fırsatları MELA HOUSE'da"])}
               className="border border-dashed border-gray-300 hover:border-[#C5A572] bg-white px-4 py-2 rounded-xs text-xs font-semibold text-[#1A1A1A] flex items-center gap-2 cursor-pointer"
             >
               <Plus size={16} className="text-[#C5A572]" />

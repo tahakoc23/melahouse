@@ -8,7 +8,7 @@ import { Package, Truck, CheckCircle2, Clock, MapPin, RefreshCw } from "lucide-r
 import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "Siparişlerim | Veloria",
+  title: "Siparişlerim | MELA HOUSE",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any; step: number }> = {
@@ -68,7 +68,7 @@ export default async function OrdersPage() {
           <div className="text-center py-16 bg-white rounded-xs border border-gray-200 shadow-xs max-w-lg mx-auto">
             <Package className="w-12 h-12 text-[#C5A572] mx-auto mb-3" />
             <h3 className="text-lg font-playfair font-semibold mb-1 text-[#1A1A1A]">Henüz siparişiniz bulunmamaktadır</h3>
-            <p className="text-gray-500 mb-6 text-xs max-w-xs mx-auto">Veloria lüks kadın giyim koleksiyonunu keşfederek ilk siparişinizi hemen oluşturabilirsiniz.</p>
+            <p className="text-gray-500 mb-6 text-xs max-w-xs mx-auto">MELA HOUSE lüks kadın giyim koleksiyonunu keşfederek ilk siparişinizi hemen oluşturabilirsiniz.</p>
             <Link href="/urunler" className="inline-flex items-center justify-center h-11 px-8 bg-[#1A1A1A] hover:bg-[#C5A572] text-white font-semibold transition-colors uppercase tracking-wider text-xs shadow-md">
               Koleksiyonu Keşfet
             </Link>

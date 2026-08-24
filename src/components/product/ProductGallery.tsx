@@ -160,7 +160,7 @@ export default function ProductGallery({ images }: ProductGalleryProps) {
                     <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent font-bold text-xs uppercase tracking-widest">
                       INSTAGRAM REEL VİDEOSU
                     </span>
-                    <h4 className="font-playfair text-lg font-semibold text-white">Veloria Özel Koleksiyon Videosu</h4>
+                    <h4 className="font-playfair text-lg font-semibold text-white">MELA HOUSE Özel Koleksiyon Videosu</h4>
                   </div>
 
                   <a 

@@ -24,7 +24,7 @@ export default function ProductSchema({ product }: ProductSchemaProps) {
     sku: product.sku || 'N/A',
     brand: {
       '@type': 'Brand',
-      name: 'Veloria',
+      name: 'MELA HOUSE',
     },
     offers: {
       '@type': 'Offer',
@@ -36,7 +36,7 @@ export default function ProductSchema({ product }: ProductSchemaProps) {
         : 'https://schema.org/OutOfStock',
       seller: {
         '@type': 'Organization',
-        name: 'Veloria',
+        name: 'MELA HOUSE',
       },
     },
     ...(product.rating && product.reviewCount && {

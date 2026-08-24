@@ -12,7 +12,7 @@ export interface WishlistItem {
   product?: any;
 }
 
-const GUEST_WISHLIST_KEY = 'veloria_guest_wishlist';
+const GUEST_WISHLIST_KEY = 'melahouse_guest_wishlist';
 
 export function useWishlist() {
   const { user } = useAuth();

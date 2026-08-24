@@ -19,10 +19,10 @@ export async function generateMetadata({
     .eq('slug', resolvedParams.slug)
     .single();
 
-  if (!product) return { title: 'Ürün Bulunamadı | Veloria' };
+  if (!product) return { title: 'Ürün Bulunamadı | MELA HOUSE' };
 
   return {
-    title: product.seo_title || `${product.name} | Veloria`,
+    title: product.seo_title || `${product.name} | MELA HOUSE`,
     description: product.seo_description || product.description,
   };
 }

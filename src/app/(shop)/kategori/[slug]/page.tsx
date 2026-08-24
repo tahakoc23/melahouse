@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const resolvedParams = await params;
   const name = resolvedParams.slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   return {
-    title: `${name} | Veloria`,
+    title: `${name} | MELA HOUSE`,
     description: `${name} özel tasarım koleksiyonumuzu keşfedin.`,
   };
 }

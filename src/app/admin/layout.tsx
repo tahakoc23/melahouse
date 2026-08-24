@@ -97,7 +97,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#F5F5F5] flex flex-col md:flex-row font-inter text-xs">
       {/* Mobile Header */}
       <div className="md:hidden bg-[#1A1A1A] text-white p-4 flex justify-between items-center">
-        <span className="font-playfair text-xl tracking-wider text-[#C5A572]">Veloria Admin</span>
+        <span className="font-playfair text-xl tracking-wider text-[#C5A572]">MELA HOUSE Admin</span>
         <button onClick={() => setIsMobileMenuOpen(true)}>
           <HamburgerIcon size={24} />
         </button>
@@ -110,7 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         md:relative md:translate-x-0
       `}>
         <div className="p-6 flex justify-between items-center border-b border-gray-800">
-          <span className="font-playfair text-2xl tracking-wider text-[#C5A572]">Veloria Admin</span>
+          <span className="font-playfair text-2xl tracking-wider text-[#C5A572]">MELA HOUSE Admin</span>
           <button className="md:hidden" onClick={() => setIsMobileMenuOpen(false)}>
             <X size={24} />
           </button>

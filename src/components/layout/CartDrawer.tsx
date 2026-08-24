@@ -64,7 +64,7 @@ export default function CartDrawer() {
                   <div>
                     <h3 className="font-playfair text-lg font-medium text-[#1A1A1A]">Sepetiniz Henüz Boş</h3>
                     <p className="text-xs text-gray-500 mt-1 max-w-xs">
-                      Veloria özel koleksiyonlarını keşfetmek için alışverişe hemen başlayın.
+                      MELA HOUSE özel koleksiyonlarını keşfetmek için alışverişe hemen başlayın.
                     </p>
                   </div>
                   <button

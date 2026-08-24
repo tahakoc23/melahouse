@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import JsonLd from '@/components/seo/JsonLd';
 
 export const metadata: Metadata = {
-  title: 'Hakkımızda | Veloria',
-  description: 'Veloria lüks kadın giyim markasının hikayesi ve vizyonu.',
+  title: 'Hakkımızda | MELA HOUSE',
+  description: 'MELA HOUSE lüks kadın giyim markasının hikayesi ve vizyonu.',
 };
 
 export default async function AboutPage() {
@@ -17,14 +17,14 @@ export default async function AboutPage() {
     .eq('content_key', 'about_text')
     .single();
 
-  const aboutText = (contentData?.content as Record<string, string>)?.text || 'Modern kadının zarafetini ve gücünü yansıtan tasarımlarıyla Veloria, lüks giyimde yeni bir standart belirliyor. Her bir parçamız, özenle seçilmiş kumaşlar ve usta işçilikle hayat buluyor.';
+  const aboutText = (contentData?.content as Record<string, string>)?.text || 'Modern kadının zarafetini ve gücünü yansıtan tasarımlarıyla MELA HOUSE, lüks giyimde yeni bir standart belirliyor. Her bir parçamız, özenle seçilmiş kumaşlar ve usta işçilikle hayat buluyor.';
 
   return (
     <div className="bg-[#FAFAF8] min-h-screen pt-28 md:pt-36">
       <JsonLd type="organization" data={null} />
       <div className="container mx-auto px-4 max-w-4xl pb-16">
         <section className="mb-16 bg-white p-8 md:p-12 shadow-sm border border-gray-100 rounded-xs">
-          <h2 className="text-3xl font-playfair text-[#1A1A1A] mb-6 border-b border-gray-100 pb-4">Veloria Hakkında</h2>
+          <h2 className="text-3xl font-playfair text-[#1A1A1A] mb-6 border-b border-gray-100 pb-4">MELA HOUSE Hakkında</h2>
           <div className="prose prose-lg text-gray-700 font-inter">
             <p className="whitespace-pre-line leading-relaxed">
               {aboutText}
@@ -50,12 +50,12 @@ export default async function AboutPage() {
         <section className="text-center border-t border-gray-200 pt-16">
           <h3 className="text-2xl font-playfair text-[#1A1A1A] mb-6">Bizi Sosyal Medyada Takip Edin</h3>
           <a 
-            href="https://instagram.com/veloria.official" 
+            href="https://instagram.com/melahouse.official" 
             target="_blank" 
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center px-8 py-4 bg-[#1A1A1A] text-[#FAFAF8] font-inter font-medium tracking-wide hover:bg-[#C5A572] transition-colors duration-300 shadow-md"
           >
-            @veloria.official
+            @melahouse.official
           </a>
         </section>
       </div>

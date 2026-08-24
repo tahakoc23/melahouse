@@ -158,7 +158,7 @@ export default function Header() {
           >
             <div className="flex flex-col items-center gap-6">
               <h1 className="font-playfair text-4xl md:text-5xl tracking-[0.2em] text-[#1A1A1A] font-semibold">
-                VELORIA
+                MELA HOUSE
               </h1>
               <div className="w-10 h-10 relative">
                 <div className="absolute inset-0 border-2 border-transparent border-t-[#C5A572] rounded-full animate-spin"></div>
@@ -198,7 +198,7 @@ export default function Header() {
             <div className="flex-shrink-0 text-center flex items-center justify-center">
               <Link href="/" onClick={handleNavigateHome} className="inline-flex items-center justify-center">
                 <h1 className={`font-playfair text-2xl md:text-4xl lg:text-5xl tracking-tight font-semibold transition-colors duration-300 ${textColorClass}`}>
-                  VELORIA
+                  MELA HOUSE
                 </h1>
               </Link>
             </div>
@@ -357,7 +357,7 @@ export default function Header() {
             >
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <Link href="/" onClick={(e) => { handleNavigateHome(e); setMobileMenuOpen(false); }}>
-                  <h2 className="font-playfair text-2xl font-semibold text-[#1A1A1A]">VELORIA</h2>
+                  <h2 className="font-playfair text-2xl font-semibold text-[#1A1A1A]">MELA HOUSE</h2>
                 </Link>
                 <button
                   onClick={() => setMobileMenuOpen(false)}

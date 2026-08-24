@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 'placeholder_resend_api_key');
-const fromEmail = process.env.EMAIL_FROM || 'Veloria <noreply@veloria.com.tr>';
+const fromEmail = process.env.EMAIL_FROM || 'MELA HOUSE <noreply@melahouse.net>';
 
 export function replaceTemplateVariables(template: string, variables: Record<string, string>): string {
   let result = template;
@@ -34,7 +34,7 @@ export async function sendOrderConfirmation(order: any, orderItems: any[], custo
       </ul>
       <p>Siparişiniz kargoya verildiğinde size tekrar bilgi vereceğiz.</p>
       <p>Bizi tercih ettiğiniz için teşekkür ederiz.</p>
-      <p>Sevgilerle,<br>Veloria Ekibi</p>
+      <p>Sevgilerle,<br>MELA HOUSE Ekibi</p>
     </div>
   `;
 
@@ -56,7 +56,7 @@ export async function sendShippingNotification(order: any, trackingNumber: strin
       <p>#${order.id.substring(0, 8)} numaralı siparişiniz kargoya verilmiştir.</p>
       <p>Kargo Takip Numaranız: <strong>${trackingNumber}</strong></p>
       <p>Bizi tercih ettiğiniz için teşekkür ederiz.</p>
-      <p>Sevgilerle,<br>Veloria Ekibi</p>
+      <p>Sevgilerle,<br>MELA HOUSE Ekibi</p>
     </div>
   `;
 

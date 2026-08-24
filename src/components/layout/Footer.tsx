@@ -30,18 +30,18 @@ export default function Footer() {
           
           {/* Column 1: Brand */}
           <div className="space-y-6">
-            <h2 className="font-playfair text-3xl font-bold tracking-wider">VELORIA</h2>
+            <h2 className="font-playfair text-3xl font-bold tracking-wider">MELA HOUSE</h2>
             <p className="font-inter text-gray-400 text-sm leading-relaxed max-w-xs">
               Zarif çizgiler, premium kumaşlar ve zamansız tasarımlarla modern kadının gardırobunu yeniden tanımlıyoruz. Lüksü her anınızda hissedin.
             </p>
             <a 
-              href="https://instagram.com/veloria.official" 
+              href="https://instagram.com/melahouse.official" 
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-[#C5A572] hover:text-[#FAFAF8] transition-colors"
             >
               <InstagramIcon />
-              <span className="font-inter text-sm">@veloria.official</span>
+              <span className="font-inter text-sm">@melahouse.official</span>
             </a>
           </div>
 
@@ -127,7 +127,7 @@ export default function Footer() {
               </button>
             </form>
             <div className="font-inter text-sm text-gray-400 space-y-2">
-              <p>Destek: <a href="mailto:destek@veloria.com" className="hover:text-[#C5A572] transition-colors">destek@veloria.com</a></p>
+              <p>Destek: <a href="mailto:destek@melahouse.com" className="hover:text-[#C5A572] transition-colors">destek@melahouse.com</a></p>
               <p>Tel: <a href="tel:+908501234567" className="hover:text-[#C5A572] transition-colors">+90 850 123 45 67</a></p>
             </div>
           </div>
@@ -137,7 +137,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="font-inter text-gray-500 text-sm text-center md:text-left">
-            &copy; {new Date().getFullYear()} Veloria. Tüm hakları saklıdır.
+            &copy; {new Date().getFullYear()} MELA HOUSE. Tüm hakları saklıdır.
           </p>
           <div className="flex gap-4 items-center">
             {/* Payment methods placeholders - simple text or could be icons */}

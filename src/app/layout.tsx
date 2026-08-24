@@ -20,24 +20,24 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | Veloria",
-    default: "Veloria - Lüks Kadın Giyim",
+    template: "%s | MELA HOUSE",
+    default: "MELA HOUSE - Lüks Kadın Giyim",
   },
   description:
-    "Veloria, modern ve sofistike kadınlar için özel tasarım lüks giyim koleksiyonları sunar. Zarafeti ve kaliteyi keşfedin.",
-  keywords: ["lüks giyim", "kadın moda", "özel tasarım", "Veloria", "elbise", "koleksiyon"],
+    "MELA HOUSE, modern ve sofistike kadınlar için özel tasarım lüks giyim koleksiyonları sunar. Zarafeti ve kaliteyi keşfedin.",
+  keywords: ["lüks giyim", "kadın moda", "özel tasarım", "MELA HOUSE", "elbise", "koleksiyon"],
   openGraph: {
-    title: "Veloria - Lüks Kadın Giyim",
-    description: "Veloria ile zarafeti ve kaliteyi keşfedin.",
-    url: "https://veloria.com.tr",
-    siteName: "Veloria",
+    title: "MELA HOUSE - Lüks Kadın Giyim",
+    description: "MELA HOUSE ile zarafeti ve kaliteyi keşfedin.",
+    url: "https://melahouse.net",
+    siteName: "MELA HOUSE",
     locale: "tr_TR",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Veloria - Lüks Kadın Giyim",
-    description: "Veloria ile zarafeti ve kaliteyi keşfedin.",
+    title: "MELA HOUSE - Lüks Kadın Giyim",
+    description: "MELA HOUSE ile zarafeti ve kaliteyi keşfedin.",
   },
   robots: {
     index: true,

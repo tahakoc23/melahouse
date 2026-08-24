@@ -7,8 +7,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Veloria | Lüks Kadın Giyim & İç Giyim',
-  description: 'Veloria ile lüks ve zarafeti keşfedin. Özel tasarım kadın giyim ve iç giyim koleksiyonlarımızla tarzınızı yansıtın.',
+  title: 'MELA HOUSE | Lüks Kadın Giyim & İç Giyim',
+  description: 'MELA HOUSE ile lüks ve zarafeti keşfedin. Özel tasarım kadın giyim ve iç giyim koleksiyonlarımızla tarzınızı yansıtın.',
 }
 
 export default async function HomePage() {

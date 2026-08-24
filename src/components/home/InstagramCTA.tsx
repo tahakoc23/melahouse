@@ -38,11 +38,11 @@ export default function InstagramCTA() {
         </h2>
         
         <p className="font-inter text-[#FAFAF8]/70 mb-10 tracking-widest uppercase text-sm">
-          @veloria.official
+          @melahouse.official
         </p>
 
         <a 
-          href="https://instagram.com/veloria.official"
+          href="https://instagram.com/melahouse.official"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center px-10 py-4 bg-[#C5A572] text-[#1A1A1A] font-inter text-sm uppercase tracking-widest hover:bg-[#b09260] transition-colors duration-300"

@@ -654,7 +654,7 @@ export default function AdminSuppliersPage() {
                             <button
                               onClick={() => router.push(`/admin/urunler/yeni?from_supplier=${prod.id}`)}
                               className="px-2.5 py-1 bg-[#1A1A1A] hover:bg-[#C5A572] text-white font-semibold rounded-xs transition-colors inline-flex items-center gap-1 text-[10px] cursor-pointer shadow-2xs"
-                              title="Bu toptancı ürününün tüm verilerini otomatik taşıyarak Veloria Mağazasına Ekle"
+                              title="Bu toptancı ürününün tüm verilerini otomatik taşıyarak MELA HOUSE Mağazasına Ekle"
                             >
                               <Plus size={12} className="text-[#C5A572]" /> Ürünü Mağazaya Ekle
                             </button>

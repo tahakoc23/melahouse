@@ -80,7 +80,7 @@ export default function RegisterForm() {
       className="bg-white p-6 sm:p-8 rounded-lg shadow-sm border border-gray-200"
     >
       <h1 className="text-2xl font-serif font-semibold text-center text-[#1A1A1A] mb-1 font-playfair">
-        Veloria'ya Kayıt Ol
+        MELA HOUSE'ya Kayıt Ol
       </h1>
       <p className="text-xs text-gray-500 text-center mb-6 font-inter">
         Üyelik bilgilerinizi ve teslimat adresinizi girerek hızlıca hesabınızı oluşturun.
