@@ -5,6 +5,9 @@ import LookbookSection from '@/components/home/LookbookSection'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata: Metadata = {
   title: 'MELA HOUSE | Lüks Kadın Giyim & İç Giyim',
   description: 'MELA HOUSE ile lüks ve zarafeti keşfedin. Özel tasarım kadın giyim ve iç giyim koleksiyonlarımızla tarzınızı yansıtın.',
