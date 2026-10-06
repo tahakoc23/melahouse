@@ -207,7 +207,7 @@ export interface DetailDef {
 export const DETAILS: DetailDef[] = [
   { key: 'mini', label: 'Mini', roots: ['mini', 'kisa elbise', 'mini elbise'], group: 'boy' },
   { key: 'midi', label: 'Midi', roots: ['midi'], group: 'boy' },
-  { key: 'maxi', label: 'Maxi', roots: ['maxi', 'maksi', 'uzun elbise', 'uzun abiye'], group: 'boy' },
+  { key: 'maxi', label: 'Maxi', roots: ['maxi', 'maksi', 'uzun elbise', 'uzun abiye', 'uzun gomlek elbise', 'uzun boy'], group: 'boy' },
   { key: 'askili', label: 'Askılı', roots: ['askili', 'ip askili'], group: 'kol' },
   { key: 'straplez', label: 'Straplez', roots: ['straplez', 'strapless'], group: 'kol' },
   { key: 'kolsuz', label: 'Kolsuz', roots: ['kolsuz'], group: 'kol' },
@@ -216,7 +216,7 @@ export const DETAILS: DetailDef[] = [
   { key: 'v-yaka', label: 'V yaka', roots: ['v yaka'], group: 'yaka' },
   { key: 'bisiklet-yaka', label: 'Bisiklet yaka', roots: ['bisiklet yaka', 'sifir yaka'], group: 'yaka' },
   { key: 'balikci-yaka', label: 'Balıkçı yaka', roots: ['balikci', 'boğazli', 'bogazli'], group: 'yaka' },
-  { key: 'gomlek-yaka', label: 'Gömlek yaka', roots: ['gomlek yaka'], group: 'yaka' },
+  { key: 'gomlek-yaka', label: 'Gömlek yaka', roots: ['gomlek yaka', 'gomlek elbise', 'gomlek tipi'], group: 'yaka' },
   { key: 'kayik-yaka', label: 'Kayık yaka', roots: ['kayik yaka'], group: 'yaka' },
   { key: 'halter-yaka', label: 'Halter yaka', roots: ['halter'], group: 'yaka' },
   { key: 'kare-yaka', label: 'Kare yaka', roots: ['kare yaka'], group: 'yaka' },
@@ -249,6 +249,12 @@ export function detailsFromText(text: string): DetailDef[] {
 /* ------------------------------------------------------------------ */
 
 /** Kadın giyim araştırmasında hiç istenmeyen sonuçlar ve nedenleri */
+/** Desen kelimeleri: düz renk bir ürün desenli ürünle karşılaştırılmaz */
+export const PATTERN_ROOTS = [
+  'desenli', 'desen', 'ekose', 'cizgili', 'cicekli', 'cicek desen', 'puantiyeli', 'puantiye', 'zebra', 'leopar',
+  'kareli', 'baskili', 'batik', 'etnik', 'geometrik', 'kazayagi', 'yilan desen', 'sal desen', 'kamuflaj', 'multicolor',
+]
+
 export const EXCLUDE_RULES: { roots: string[]; reason: string; unlessQueryHas?: string[] }[] = [
   { roots: ['erkek', 'men s', 'mens'], reason: 'Erkek ürünü' },
   { roots: ['cocuk', 'kiz cocuk', 'bebek', 'kids', 'genc kiz'], reason: 'Çocuk ürünü' },
@@ -257,6 +263,12 @@ export const EXCLUDE_RULES: { roots: string[]; reason: string; unlessQueryHas?: 
   { roots: ['hamile', 'lohusa'], reason: 'Hamile giyim', unlessQueryHas: ['hamile'] },
   { roots: ['2 li', '3 lu', '4 lu', '5 li', 'li paket', 'lu paket', 'li set', 'lu set'], reason: 'Çoklu paket' },
   { roots: ['kostum', 'kostumu', 'cadilar', 'cosplay'], reason: 'Kostüm' },
+  { roots: ['ic elbise', 'ic elbisesi', 'astar elbise', 'jile'], reason: 'İç elbise / astar', unlessQueryHas: ['ic elbise', 'jile'] },
+  {
+    roots: ['abiye', 'payet', 'payetli', 'gece elbise', 'gece elbisesi', 'nisan elbise', 'mezuniyet', 'simli', 'tasli', 'pullu'],
+    reason: 'Abiye / gece elbisesi',
+    unlessQueryHas: ['abiye', 'payet', 'gece', 'simli', 'tasli', 'pullu', 'nisan', 'mezuniyet'],
+  },
   { roots: ['kumas metre', 'top kumas', 'metre kumas'], reason: 'Metre kumaş' },
   { roots: ['askisi', 'aski seti', 'kilif', 'hurc', 'canta', 'ayakkabi', 'terlik', 'cuzdan'], reason: 'Aksesuar / farklı ürün' },
 ]

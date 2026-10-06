@@ -263,6 +263,87 @@ function boynerGroupBrand(brand: 'İpekyol' | 'Twist', host: string, id: string)
 
 const ipekyol = boynerGroupBrand('İpekyol', 'https://www.ipekyol.com.tr', 'ipekyol')
 
+/** Detaylı sorgu az sonuç verirse geniş sorguyla tekrar dener (küçük kataloglu marka siteleri) */
+async function fullThenBroad(q: SourceQuery, search: (term: string) => Promise<RawItem[]>, min = 4): Promise<RawItem[]> {
+  const first = await search(q.full)
+  if (first.length >= min || q.broad === q.full) return first
+  const second = await search(q.broad)
+  const seen = new Set(first.map(i => i.url))
+  return [...first, ...second.filter(i => !seen.has(i.url))]
+}
+
+const twist: Source = {
+  id: 'twist',
+  name: 'Twist',
+  segment: 'premium',
+  searchUrl: q => `https://www.twist.com.tr/arama?q=${enc(q.full)}`,
+  run(q) {
+    return fullThenBroad(q, async term => {
+      const html = await fetchPage(`https://www.twist.com.tr/arama?q=${enc(term)}`)
+      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
+      if (!m) return []
+      let products: Record<string, unknown>[] = []
+      try {
+        products = JSON.parse(m[1])?.props?.pageProps?.data?.response?.products ?? []
+      } catch {
+        return []
+      }
+      return products
+        .filter(p => p.name && p.routePath)
+        .map(p => {
+          const sale = parsePrice(p.salesPrice) || parsePrice(p.discountPrice)
+          const base = parsePrice(p.basePrice)
+          return {
+            store: 'Twist',
+            segment: 'premium' as const,
+            // shortName Twist'te rengi taşır ("Siyah")
+            title: `Twist ${str(p.name).trim()} ${str(p.shortName)}`.trim(),
+            url: `https://www.twist.com.tr/${str(p.routePath)}`,
+            price: sale || base,
+            originalPrice: base > sale ? base : undefined,
+            brand: 'Twist',
+          }
+        })
+    })
+  },
+}
+
+const roman: Source = {
+  id: 'roman',
+  name: 'Roman',
+  segment: 'premium',
+  searchUrl: q => `https://www.roman.com.tr/arama?q=${enc(q.full)}`,
+  run(q) {
+    return fullThenBroad(q, async term => {
+      const html = await fetchPage(`https://www.roman.com.tr/arama?q=${enc(term)}`)
+      const out: RawItem[] = []
+      // T-Soft: PRODUCT_DATA.push(JSON.parse('{\"id\":...}'))
+      for (const m of html.matchAll(/PRODUCT_DATA\.push\(JSON\.parse\('((?:[^'\\]|\\.)*)'\)\)/g)) {
+        let o: Record<string, unknown>
+        try {
+          o = JSON.parse(m[1].replace(/\\(.)/g, '$1'))
+        } catch {
+          continue
+        }
+        if (!o.name || !o.url) continue
+        const sale = parsePrice(o.total_sale_price)
+        const base = parsePrice(o.total_base_price)
+        out.push({
+          store: 'Roman',
+          segment: 'premium',
+          title: `Roman ${str(o.name).replace(/\s*Standart Renk\s*$/i, '')}`,
+          url: absoluteUrl(str(o.url), 'https://www.roman.com.tr'),
+          price: sale || base,
+          originalPrice: base > sale ? base : undefined,
+          image: str(o.image) || undefined,
+          brand: 'Roman',
+        })
+      }
+      return out
+    })
+  },
+}
+
 /* ------------------------------------------------------------------ */
 /* Google Alışveriş (SerpApi): Trendyol, Hepsiburada ve markalar       */
 /* ------------------------------------------------------------------ */
@@ -317,7 +398,7 @@ export const googleShopping: Source = {
   },
 }
 
-export const DIRECT_SOURCES: Source[] = [n11, lcw, koton, penti, network, beymen, ipekyol]
+export const DIRECT_SOURCES: Source[] = [n11, lcw, koton, penti, network, beymen, ipekyol, twist, roman]
 
 /** İç giyim kategorilerinde Penti anlamlı; diğerlerinde Penti'yi atla */
 export const LINGERIE_ONLY = new Set(['penti'])

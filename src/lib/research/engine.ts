@@ -4,6 +4,7 @@ import {
   DETAILS,
   EXCLUDE_RULES,
   FABRICS,
+  PATTERN_ROOTS,
   categoryFromText,
   colorFamiliesIn,
   colorFromText,
@@ -33,6 +34,8 @@ export interface ResearchPlan {
   fabric: { key: string; label: string } | null
   details: { key: string; label: string }[]
   query: SourceQuery
+  /** Ürün adı + elle yazılan ifade: desen/abiye gibi istisnaların aranan üründe olup olmadığı */
+  text: string
 }
 
 export interface ResearchItem {
@@ -105,12 +108,24 @@ export function buildPlan(attrs: ResearchAttributes, queryOverride?: string): Re
   if (fabric?.key === 'dantel') detailMap.delete('dantelli')
   const details = [...detailMap.values()]
 
-  // Arama ifadesi: renk + en ayırt edici 2 detay (önce boy/yaka/kol) + kumaş + ürün tipi
-  const ranked = [...details].sort((a, b) => Number(!!b.group) - Number(!!a.group))
-  const detailWords = ranked.slice(0, 2).map(d => d.label.toLocaleLowerCase('tr'))
+  // Arama ifadesi mağazaların kullandığı dile yakın olmalı: "siyah maxi gömlek elbise".
+  // Mağaza aramaları kelimeleri VE ile eşler; uzun ifade sonucu sıfırlar. Bu yüzden en fazla
+  // 2 detay kelimesi (önce boy, sonra stil/yaka, kalıp, kol) alınır; kumaş yalnız yer kalırsa eklenir.
+  const GROUP_RANK: Record<string, number> = { boy: 0, yaka: 1, kalip: 2, kol: 3, bel: 4 }
+  const ranked = [...details].sort(
+    (a, b) => (a.group ? GROUP_RANK[a.group] : 9) - (b.group ? GROUP_RANK[b.group] : 9),
+  )
+  const picked = ranked.slice(0, 2)
+  // "Gömlek yaka elbise" yerine mağazalardaki adıyla "gömlek elbise"
+  const detailWords = picked.map(d => (d.key === 'gomlek-yaka' && category ? 'gömlek' : d.label.toLocaleLowerCase('tr')))
   const full =
     queryOverride?.trim() ||
-    [color?.label.toLocaleLowerCase('tr'), ...detailWords, fabric?.adjective, category?.searchWord]
+    [
+      color?.label.toLocaleLowerCase('tr'),
+      ...detailWords,
+      picked.length < 2 ? fabric?.adjective : undefined,
+      category?.searchWord,
+    ]
       .filter(Boolean)
       .join(' ')
       .trim() ||
@@ -124,6 +139,7 @@ export function buildPlan(attrs: ResearchAttributes, queryOverride?: string): Re
     fabric: fabric ? { key: fabric.key, label: fabric.label } : null,
     details: details.map(d => ({ key: d.key, label: d.label })),
     query: { full, broad },
+    text: `${name} ${queryOverride || ''}`.trim(),
   }
 }
 
@@ -133,7 +149,7 @@ export function buildPlan(attrs: ResearchAttributes, queryOverride?: string): Re
 
 function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included: boolean; matched: string[]; conflicts: string[] } {
   const toks = tokens(item.title)
-  const queryToks = tokens(plan.query.full)
+  const queryToks = tokens(`${plan.query.full} ${plan.text}`)
   const matched: string[] = []
   const conflicts: string[] = []
   let hardExclude = false
@@ -193,18 +209,24 @@ function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included
       const other = COLORS.find(c => c.family !== def.family && hasAny(toks, c.roots))
       conflicts.push(`Renk farklı${other ? ` (${other.label})` : ''}`)
     } else {
-      score += 5 // renk belirtilmemiş: nötr
+      score += 8 // renk belirtilmemiş (çoğu marka adda rengi yazmaz): nötr
     }
   } else {
     score += 10
   }
 
-  // Model detayları: eşleşen +8 (en fazla 25); aynı gruptan farklı detay çelişkidir
+  // Desen: aranan ürün düz ise desenli ürün karşılaştırılamaz (fiyat ve stil farklı)
+  if (!hasAny(queryToks, PATTERN_ROOTS) && hasAny(toks, PATTERN_ROOTS)) {
+    score -= 20
+    conflicts.push('Desenli ürün')
+  }
+
+  // Model detayları: eşleşen +10 (en fazla 30); aynı gruptan farklı detay çelişkidir
   let detailPoints = 0
   for (const pd of plan.details) {
     const def = DETAILS.find(d => d.key === pd.key)!
     if (hasAny(toks, def.roots)) {
-      detailPoints += 8
+      detailPoints += 10
       matched.push(def.label)
     } else if (def.group) {
       const rival = DETAILS.find(d => d.group === def.group && d.key !== def.key && hasAny(toks, d.roots))
@@ -214,7 +236,7 @@ function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included
       }
     }
   }
-  score += Math.min(detailPoints, 25)
+  score += Math.min(detailPoints, 30)
   if (!plan.details.length) score += 10
 
   score = Math.max(0, Math.min(100, Math.round(score)))
