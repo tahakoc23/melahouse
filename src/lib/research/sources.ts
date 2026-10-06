@@ -53,17 +53,21 @@ const n11: Source = {
     return findJsonObjects(html, '"sellerNickName"')
       .filter(o => /kad[iı]n/i.test(str(o.category1Name)) || !o.category1Name)
       .map(o => {
+        // Eski biçim: priceInfo.finalPrice + productUrl; yeni biçim (2026): displayPrice + url
         const info = (o.priceInfo || {}) as Record<string, unknown>
-        const price = parsePrice(info.finalPrice)
-        const old = parsePrice(info.oldPrice)
+        const area = (o.finalPriceAreaDTO || {}) as Record<string, unknown>
+        const price = parsePrice(info.finalPrice) || parsePrice(area.finalPrice) || parsePrice(o.displayPrice)
+        const old = parsePrice(info.oldPrice) || parsePrice(o.oldPrice)
+        const image = str(o.imageUrl) || str((o.imagePathList as unknown[] | undefined)?.[0])
         return {
           store: 'n11',
           segment: 'pazaryeri' as const,
-          title: str(o.subtitle) || str(o.title),
-          url: absoluteUrl(str(o.productUrl), 'https://www.n11.com'),
+          // subtitle sonuna beden ekleyebiliyor ("... Siyah S"); title temiz
+          title: str(o.title) || str(o.subtitle),
+          url: absoluteUrl(str(o.productUrl) || str(o.urlWithoutSellerShop) || str(o.url), 'https://www.n11.com'),
           price,
           originalPrice: old > price ? Math.round(old * 100) / 100 : undefined,
-          image: str(o.imageUrl).replace('{0}', '500'),
+          image: image.replace('{0}', '500') || undefined,
           brand: str(o.brand) || undefined,
         }
       })
