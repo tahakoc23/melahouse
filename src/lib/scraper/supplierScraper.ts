@@ -154,16 +154,22 @@ function parseTicimax(html: string, url: string, domain: string): ScrapedProduct
     return 0
   }
   const vatRate = pos(first.kdvOrani, m.productVatRate, m.kdvOrani)
-  let net = pos(first.urunSepetFiyati, first.indirimliFiyati, first.satisFiyati, m.productPrice)
+  // Yabancı para birimindeki tutar TL sanılmasın (maliyet hesabını bozar)
+  const currency = String(m.productCurrency || first.paraBirimi || 'TRY').toUpperCase()
+  const isTry = currency === 'TRY' || currency === 'TL'
+  let net = isTry ? pos(first.urunSepetFiyati, first.indirimliFiyati, first.satisFiyati, m.productPrice) : 0
   const vat = pos(first.urunSepetFiyatiKDV, first.indirimliKDV, first.satisKDV)
   const vatIncluded = first.kdvDahil === true
-  let priceWithVat = pos(m.productPriceKDVIncluded) || (net ? (vatIncluded ? net : net + (vat || (net * vatRate) / 100)) : 0)
+  let priceWithVat = !isTry
+    ? 0
+    : pos(m.productPriceKDVIncluded) || (net ? (vatIncluded ? net : net + (vat || (net * vatRate) / 100)) : 0)
   let priceSource = priceWithVat ? 'productDetailModel' : ''
   if (!priceWithVat) {
     // Son çare: JSON-LD Offer. Ticimax burada vitrindeki fiyatı (KDV hariç) yayınlar;
     // oran okunamadıysa giyimdeki %10 KDV varsayılır ve kaynakta belirtilir.
     const ld = html.match(/"@type"\s*:\s*"Offer"[\s\S]{0,400}?"price"\s*:\s*"?([\d.,]+)"?/)
-    const ldPrice = ld ? parseFloat(ld[1].replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')) : 0
+    const ldTry = /"priceCurrency"\s*:\s*"(try|tl)"/i.test(ld?.[0] || '')
+    const ldPrice = ld && ldTry ? parseFloat(ld[1].replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')) : 0
     if (ldPrice > 0) {
       const rate = vatRate || 10
       net = ldPrice
@@ -246,26 +252,41 @@ export async function scrapeSupplierProduct(targetUrl: string): Promise<ScrapedP
   const domain = extractDomain(url);
   const fallbackBrand = formatBrandFromDomain(domain);
 
-  let html = '';
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.9',
-        'Cache-Control': 'no-cache'
-      },
-      next: { revalidate: 0 }
-    });
+  const fetchHtml = async (pageUrl: string) => {
+    try {
+      const res = await fetch(pageUrl, {
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'tr-TR,tr;q=0.9',
+          'Cache-Control': 'no-cache'
+        },
+        next: { revalidate: 0 }
+      });
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      return await res.text();
+    } catch (err: any) {
+      console.error(`Fetch failed for ${pageUrl}:`, err);
+      throw new Error(`Toptancı sitesine bağlanılamadı: ${err.message}`);
     }
+  };
 
-    html = await res.text();
-  } catch (err: any) {
-    console.error(`Fetch failed for ${url}:`, err);
-    throw new Error(`Toptancı sitesine bağlanılamadı: ${err.message}`);
+  let html = await fetchHtml(url);
+
+  // Ticimax sunucu IP'sine göre para birimi seçer: Vercel (Frankfurt) EUR görür ve fiyat 0 gelir.
+  // "currency=try" parametresi bu seçimi ezer; TL dışı bir sayfa geldiyse TL ile tekrar çek.
+  if (html.includes('var productDetailModel') && /"productCurrency"\s*:\s*"(?!TRY")/.test(html)) {
+    try {
+      const tryUrl = new URL(url);
+      tryUrl.searchParams.set('currency', 'try');
+      html = await fetchHtml(tryUrl.toString());
+    } catch (err) {
+      console.error('TL sayfası alınamadı:', err);
+    }
   }
 
   // Ticimax sitelerinde zengin ürün modeli var: renk, beden, kumaş, KDV dahil fiyat, tüm görseller
