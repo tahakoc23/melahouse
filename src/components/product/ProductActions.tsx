@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import VariantSelector from './VariantSelector';
+import { useState, useCallback } from 'react';
+import VariantSelector, { type Variant } from './VariantSelector';
+import { effectivePrice } from './catalog';
+import { MAX_QUANTITY_PER_ITEM } from '@/lib/constants';
 import SizeGuide from './SizeGuide';
 import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -24,10 +26,11 @@ interface ProductActionsProps {
 }
 
 export default function ProductActions({ product }: ProductActionsProps) {
-  const [selectedVariant, setSelectedVariant] = useState<any>(null);
+  const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
 
   const addItem = useCartStore((state) => state.addItem);
   const toggleCart = useUIStore((state) => state.toggleCart);
@@ -35,16 +38,46 @@ export default function ProductActions({ product }: ProductActionsProps) {
   const { isInWishlist, toggleWishlist } = useWishlist();
   const isFav = isInWishlist(product.id);
 
-  const primaryImage = product.product_images?.find((img) => img.is_primary)?.image_url || product.product_images?.[0]?.image_url || '';
-  const priceToUse = product.sale_price || product.base_price;
+  const variants: Variant[] = product.product_variants || [];
+  const hasVariants = variants.length > 0;
 
-  const isOutOfStock = product.is_out_of_stock || (Array.isArray(product.tags) && product.tags.includes('Tükendi')) || product.tags === 'Tükendi';
+  const primaryImage = product.product_images?.find((img) => img.is_primary)?.image_url || product.product_images?.[0]?.image_url || '';
+  const priceToUse = effectivePrice(product);
+
+  const isOutOfStock =
+    product.is_out_of_stock ||
+    (Array.isArray(product.tags) && product.tags.includes('Tükendi')) ||
+    product.tags === 'Tükendi' ||
+    (hasVariants && !variants.some((v) => Number(v.stock_quantity) > 0));
+
+  // Highest quantity allowed for the current selection (variant stock, capped per line)
+  const maxQuantity = selectedVariant
+    ? Math.min(Math.max(0, Math.floor(Number(selectedVariant.stock_quantity) || 0)), MAX_QUANTITY_PER_ITEM)
+    : MAX_QUANTITY_PER_ITEM;
+
+  const handleVariantChange = useCallback((v: Variant | null) => {
+    setSelectedVariant(v);
+    if (v) setShowValidation(false);
+  }, []);
+
+  // The chosen quantity never exceeds the selected variant's stock
+  const effectiveQuantity = Math.max(1, Math.min(quantity, maxQuantity || 1));
+
+  const needsSelection = hasVariants && !selectedVariant;
+  const selectionOutOfStock = !!selectedVariant && maxQuantity < 1;
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
+    if (needsSelection) {
+      setShowValidation(true);
+      return;
+    }
+    if (selectionOutOfStock) return;
 
-    const variantInfo = selectedVariant 
-      ? `${selectedVariant.color_name || ''} / ${selectedVariant.size || ''}`
+    const variantInfo = selectedVariant
+      ? [selectedVariant.color_name, selectedVariant.size && selectedVariant.size !== 'STD' ? selectedVariant.size : null]
+          .filter(Boolean)
+          .join(' / ') || undefined
       : undefined;
 
     addItem({
@@ -54,10 +87,10 @@ export default function ProductActions({ product }: ProductActionsProps) {
       name: product.name,
       variantInfo,
       price: priceToUse,
-      quantity,
+      quantity: effectiveQuantity,
       image: primaryImage,
       slug: product.slug,
-      maxStock: selectedVariant?.stock_quantity ?? 10
+      maxStock: selectedVariant ? maxQuantity : undefined
     });
 
     toggleCart(true);
@@ -92,31 +125,40 @@ export default function ProductActions({ product }: ProductActionsProps) {
         </button>
       </div>
 
-      {product.product_variants && product.product_variants.length > 0 && (
-        <VariantSelector 
-          variants={product.product_variants} 
-          onVariantChange={(v) => setSelectedVariant(v)} 
+      {hasVariants && (
+        <VariantSelector
+          variants={variants}
+          onVariantChange={handleVariantChange}
+          showValidation={showValidation}
         />
+      )}
+
+      {showValidation && needsSelection && (
+        <p role="alert" className="text-xs font-medium text-rose-600">
+          Sepete eklemeden önce lütfen renk ve beden seçiniz.
+        </p>
       )}
 
       {/* Quantity, Add to Cart & Wishlist Heart Button */}
       <div className="flex flex-col sm:flex-row gap-3 pt-4">
         {/* Quantity selector */}
         <div className={`flex items-center border border-gray-300 w-32 justify-between px-3 py-3 ${isOutOfStock ? 'opacity-40 pointer-events-none' : ''}`}>
-          <button 
+          <button
             type="button"
+            aria-label="Adet azalt"
             disabled={isOutOfStock}
-            onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+            onClick={() => setQuantity(Math.max(1, effectiveQuantity - 1))}
             className="text-lg font-medium text-gray-500 hover:text-black px-2 cursor-pointer"
           >
             -
           </button>
-          <span className="text-sm font-medium text-[#1A1A1A]">{quantity}</span>
-          <button 
+          <span className="text-sm font-medium text-[#1A1A1A]">{effectiveQuantity}</span>
+          <button
             type="button"
-            disabled={isOutOfStock}
-            onClick={() => setQuantity(prev => prev + 1)}
-            className="text-lg font-medium text-gray-500 hover:text-black px-2 cursor-pointer"
+            aria-label="Adet artır"
+            disabled={isOutOfStock || effectiveQuantity >= maxQuantity}
+            onClick={() => setQuantity(Math.min(effectiveQuantity + 1, maxQuantity))}
+            className="text-lg font-medium text-gray-500 hover:text-black px-2 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           >
             +
           </button>
@@ -132,12 +174,17 @@ export default function ProductActions({ product }: ProductActionsProps) {
             Ü R Ü N  T Ü K E N D İ (STOKTA YOK)
           </button>
         ) : (
-          <button 
+          <button
             type="button"
             onClick={handleAddToCart}
-            className="flex-1 bg-[#C5A572] hover:bg-[#1A1A1A] text-white py-4 uppercase tracking-widest text-xs font-medium font-inter transition-all duration-300 shadow-md cursor-pointer text-center rounded-xs"
+            disabled={selectionOutOfStock}
+            className="flex-1 bg-[#C5A572] hover:bg-[#1A1A1A] text-white py-4 uppercase tracking-widest text-xs font-medium font-inter transition-all duration-300 shadow-md cursor-pointer text-center rounded-xs disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
           >
-            Sepete Ekle — {(priceToUse * quantity).toLocaleString('tr-TR')} ₺
+            {selectionOutOfStock
+              ? 'Bu seçenek tükendi'
+              : needsSelection
+              ? 'Renk / Beden Seçiniz'
+              : `Sepete Ekle — ${(priceToUse * effectiveQuantity).toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺`}
           </button>
         )}
 

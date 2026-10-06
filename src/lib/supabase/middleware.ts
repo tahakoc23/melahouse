@@ -22,7 +22,24 @@ export async function updateSession(request: NextRequest) {
     }
   )
   const { data: { user } } = await supabase.auth.getUser()
-  
+
+  // Admin API routes: return JSON 401/403 instead of redirecting (defense in depth;
+  // each route handler also enforces requireAdmin()).
+  if (request.nextUrl.pathname.startsWith('/api/admin')) {
+    if (!user) {
+      return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 401 })
+    }
+    const { data: apiProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    if ((apiProfile as { role?: string | null } | null)?.role !== 'admin') {
+      return NextResponse.json({ error: 'Yetkisiz erişim.' }, { status: 403 })
+    }
+    return supabaseResponse
+  }
+
   // Protected routes
   const protectedPaths = ['/hesabim', '/siparislerim', '/favorilerim', '/odeme']
   const adminPaths = ['/admin']

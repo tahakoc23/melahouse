@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Mesafeli Satış Sözleşmesi | MELA HOUSE',
+  title: 'Mesafeli Satış Sözleşmesi',
   description: 'MELA HOUSE 6502 sayılı Tüketicinin Korunması Hakkında Kanun uyarınca Mesafeli Satış Sözleşmesi.',
 }
 

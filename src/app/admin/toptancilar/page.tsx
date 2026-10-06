@@ -28,6 +28,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
+import PriceResearchPanel from '@/components/admin/PriceResearchPanel'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 
@@ -68,10 +69,8 @@ export default function AdminSuppliersPage() {
   const [editingProduct, setEditingProduct] = useState<any | null>(null)
   const [updatingProduct, setUpdatingProduct] = useState(false)
 
-  // Competitor Research State (Trendyol / Hepsiburada)
-  const [competitorQuery, setCompetitorQuery] = useState('')
-  const [isSearchingCompetitors, setIsSearchingCompetitors] = useState(false)
-  const [competitorAnalysis, setCompetitorAnalysis] = useState<any | null>(null)
+  // Piyasa fiyat araştırması: "Pazarda Ara" ile seçilen toptancı ürünü
+  const [researchTarget, setResearchTarget] = useState<{ key: string; id: string; title: string; fabric: string; cost?: number } | null>(null)
 
   // Toast State
   const [toast, setToast] = useState<{ isOpen: boolean; type: 'success' | 'error'; title?: string; message: string }>({
@@ -371,37 +370,6 @@ export default function AdminSuppliersPage() {
     }
   }
 
-  // Action: Scrape Trendyol & Hepsiburada Competitor Prices (5 Trendyol + 5 Hepsiburada)
-  const handleSearchCompetitors = async (queryTitle?: string, fabricInfo?: string) => {
-    const q = (queryTitle || competitorQuery).trim()
-    if (!q) {
-      showToast('Lütfen aramak istediğiniz kıyafet adını giriniz.', 'error')
-      return
-    }
-
-    setIsSearchingCompetitors(true)
-    setCompetitorAnalysis(null)
-    setActiveTab('competitors')
-
-    try {
-      const res = await fetch('/api/admin/suppliers/competitors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, fabric: fabricInfo || 'Saten / Dokuma Kumaş' })
-      })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Pazar yerleri aranamadı.')
-
-      setCompetitorAnalysis(data.analysis)
-      showToast('Trendyol ve Hepsiburada pazar yerlerinden 5+5 ürün başarıyla karşılaştırıldı!', 'success', '🏷️ 10 Adet Doğrudan Ürün Linki')
-    } catch (err: any) {
-      console.error(err)
-      showToast(err.message || 'Rakip araştırması başarısız.', 'error')
-    } finally {
-      setIsSearchingCompetitors(false)
-    }
-  }
 
   const filteredProducts = supplierProducts.filter(p => 
     p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -495,7 +463,7 @@ export default function AdminSuppliersPage() {
           }`}
         >
           <TrendingUp size={16} />
-          <span>Trendyol & Hepsiburada Rakip Analizi</span>
+          <span>Piyasa Fiyat Araştırması</span>
         </button>
 
         <button
@@ -643,8 +611,8 @@ export default function AdminSuppliersPage() {
 
                             <button
                               onClick={() => {
-                                setCompetitorQuery(prod.title)
-                                handleSearchCompetitors(prod.title, prod.fabric)
+                                setResearchTarget({ key: `${prod.id}-${Date.now()}`, id: prod.id, title: prod.title, fabric: prod.fabric || '', cost: Number(prod.price) || undefined })
+                                setActiveTab('competitors')
                               }}
                               className="px-2 py-1 bg-amber-50 hover:bg-amber-200 text-amber-900 font-semibold rounded-xs transition-colors inline-flex items-center gap-1 text-[10px] cursor-pointer"
                             >
@@ -765,128 +733,16 @@ export default function AdminSuppliersPage() {
         </div>
       )}
 
-      {/* TAB 3: TRENDYOL & HEPSİBURADA RAKİP FİYAT ANALİZİ */}
+      {/* TAB 3: PİYASA FİYAT ARAŞTIRMASI */}
       {activeTab === 'competitors' && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xs border border-gray-200 shadow-xs space-y-4">
-            <div>
-              <h3 className="font-playfair font-semibold text-lg text-[#1A1A1A]">Trendyol & Hepsiburada Rakip Satıcı Araştırması</h3>
-              <p className="text-gray-500 text-xs mt-0.5">
-                Ücretli hiçbir API kullanmadan açık kaynaklı kodlarla Trendyol ve Hepsiburada üzerindeki benzer kıyafet satıcılarını ve ortalama pazar satış fiyatlarını bulun.
-              </p>
-            </div>
-
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault()
-                handleSearchCompetitors()
-              }} 
-              className="flex gap-2"
-            >
-              <input
-                type="text"
-                value={competitorQuery}
-                onChange={(e) => setCompetitorQuery(e.target.value)}
-                placeholder="ör. Saten Kruvaze Abiye Elbise..."
-                className="flex-1 p-3 border border-gray-300 rounded-xs text-xs"
-              />
-              <button
-                type="submit"
-                disabled={isSearchingCompetitors}
-                className="bg-[#1A1A1A] hover:bg-[#C5A572] text-white px-6 py-3 rounded-xs font-semibold text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors shadow-md disabled:opacity-50"
-              >
-                {isSearchingCompetitors ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Pazaryerleri Taranıyor...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-[#C5A572]" />
-                    <span>Pazarda Araştır</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-
-          {/* Analysis Results Display */}
-          {competitorAnalysis && (
-            <div className="space-y-6">
-              {/* Stat Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-amber-50 border border-amber-300 p-4 rounded-xs shadow-2xs">
-                  <span className="text-amber-900 text-[10px] font-bold uppercase tracking-wider block">Ortalama Pazar Satış Fiyatı</span>
-                  <span className="text-2xl font-bold text-[#1A1A1A] font-playfair">{formatPrice(competitorAnalysis.average_price)}</span>
-                </div>
-
-                <div className="bg-white border border-gray-200 p-4 rounded-xs shadow-xs">
-                  <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">En Düşük Pazar Fiyatı</span>
-                  <span className="text-xl font-bold text-emerald-700">{formatPrice(competitorAnalysis.min_price)}</span>
-                </div>
-
-                <div className="bg-white border border-gray-200 p-4 rounded-xs shadow-xs">
-                  <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">En Yüksek Pazar Fiyatı</span>
-                  <span className="text-xl font-bold text-rose-700">{formatPrice(competitorAnalysis.max_price)}</span>
-                </div>
-              </div>
-
-              {/* Verified Marketplace Listings Table */}
-              <div className="bg-white border border-gray-200 rounded-xs overflow-hidden shadow-xs">
-                <div className="p-4 border-b border-gray-200 font-bold text-xs text-[#1A1A1A] flex items-center justify-between">
-                  <span>Tespit Edilen Benzer Satıcı Ürünleri ({competitorAnalysis.items?.length || 0})</span>
-                  <span className="text-[11px] text-emerald-700 font-semibold">✓ Koton + Penti + Zara %100 Birebir Ürün İsim & Kumaş Bilgisi Taraması</span>
-                </div>
-
-                {competitorAnalysis.items?.length === 0 ? (
-                  <div className="p-8 text-center bg-amber-50/60 border border-amber-200 rounded-xs space-y-1.5 my-4 mx-4">
-                    <AlertCircle className="w-6 h-6 text-amber-600 mx-auto" />
-                    <h4 className="font-bold text-amber-900 text-xs">Aranan Ürün İsmi ve Kumaş Bilgisine %100 Uyan Rakip Ürün Bulunamadı</h4>
-                    <p className="text-[11px] text-amber-700 font-medium">
-                      Aradığınız ürün adında ve kumaş tipinde ("Saten", "Keten", "Pamuk", "Deri", "Triko" vb.) diğer mağazalarda birebir eşleşen ürün bulunamadığı için istenildiği gibi alakasız ürün gösterilmemektedir.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100">
-                    {competitorAnalysis.items?.map((item: any, idx: number) => (
-                      <div key={idx} className="p-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            item.marketplace_name.includes('Koton') ? 'bg-red-100 text-red-900 border border-red-300' :
-                            item.marketplace_name.includes('Penti') ? 'bg-pink-100 text-pink-900 border border-pink-300' :
-                            'bg-black text-white border border-gray-700 font-bold tracking-wider'
-                          }`}>
-                            {item.marketplace_name}
-                          </span>
-                          <div>
-                            <h4 className="font-semibold text-xs text-[#1A1A1A]">{item.product_title}</h4>
-                            {item.fabric_match && (
-                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 inline-block mt-0.5">
-                                ✓ {item.fabric_match}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold text-sm text-[#1A1A1A]">{formatPrice(item.price)}</span>
-                          <a
-                            href={item.product_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1.5 bg-[#1A1A1A] hover:bg-[#C5A572] text-white rounded-xs text-[11px] font-semibold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                          >
-                            <ExternalLink size={12} /> Ürünü Gör ➔
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <PriceResearchPanel
+          key={researchTarget?.key ?? 'manual'}
+          initialQuery={researchTarget?.title ?? ''}
+          fabric={researchTarget?.fabric ?? ''}
+          supplierProductId={researchTarget?.id}
+          costPrice={researchTarget?.cost}
+          autoRun={!!researchTarget}
+        />
       )}
 
       {/* TAB 4: TOPTANCI FİRMALAR REHBERİ */}

@@ -10,9 +10,9 @@ interface BlogDetailProps {
 export async function generateMetadata({ params }: BlogDetailProps): Promise<Metadata> {
   const { slug } = await params
   const post = BLOG_POSTS.find(p => p.slug === slug)
-  if (!post) return { title: 'Yazı Bulunamadı | MELA HOUSE' }
+  if (!post) return { title: 'Yazı Bulunamadı' }
   return {
-    title: `${post.title} | MELA HOUSE Stil Rehberi`,
+    title: `${post.title} · Stil Rehberi`,
     description: post.excerpt,
     keywords: [post.category, 'kadın giyim', 'kadın elbise modelleri', 'MELA HOUSE'],
   }

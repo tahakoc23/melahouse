@@ -18,7 +18,12 @@ export default function LoginForm() {
   const { signIn } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectParam = searchParams.get("redirect");
+  const rawRedirect = searchParams.get("redirect");
+  // Prevent open redirect: only allow same-origin relative paths ("/..." but not "//..." or "/\...")
+  const redirectParam =
+    rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.startsWith("/\\")
+      ? rawRedirect
+      : "/";
   const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {

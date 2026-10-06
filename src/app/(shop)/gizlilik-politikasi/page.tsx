@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Gizlilik Politikası ve KVKK Aydınlatma Metni | MELA HOUSE',
+  title: 'Gizlilik Politikası ve KVKK Aydınlatma Metni',
   description: 'MELA HOUSE Gizlilik Politikası, Kişisel Verilerin Korunması Kanunu (KVKK) ve Çerez Politikası hakkında detaylı bilgilendirme.',
 }
 

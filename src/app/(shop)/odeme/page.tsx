@@ -1,24 +1,77 @@
-// @ts-nocheck
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useCartStore } from "@/stores/cartStore";
+import { useCartStore, type CartItem } from "@/stores/cartStore";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CheckCircle2, ShieldCheck, Truck, CreditCard, Lock, Loader2, ShoppingBag, MapPin, Plus, Check } from "lucide-react";
+import { CheckCircle2, ShieldCheck, Truck, CreditCard, Lock, Loader2, ShoppingBag, MapPin, Plus, Check, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { TURKISH_CITIES } from "@/lib/constants";
+import { motion } from "framer-motion";
+import toast, { Toaster } from "react-hot-toast";
+import { LuxuryConfetti } from "@/components/ui/LuxuryConfetti";
+import { TURKISH_CITIES, calculateShipping } from "@/lib/constants";
+import type { Database } from "@/types/database";
+
+// Shopier'e yönlendirmeden önce sepetin yedeği (ödeme başarısız olursa geri yüklemek için)
+const PENDING_CART_KEY = "melahouse-pending-cart";
+
+const PAYMENT_ERROR_MESSAGES: Record<string, string> = {
+  payment_failed: "Ödeme tamamlanamadı. Kartınızdan çekim yapılmadıysa tekrar deneyebilirsiniz.",
+  invalid_signature: "Ödeme doğrulanamadı. Lütfen tekrar deneyin veya bizimle iletişime geçin.",
+  order_not_found: "Sipariş bulunamadı. Lütfen tekrar deneyin.",
+  already_processed: "Bu sipariş daha önce işlenmiş. Durumunu Siparişlerim sayfasından kontrol edebilirsiniz.",
+  server_error: "Ödeme işlenirken bir hata oluştu. Lütfen bizimle iletişime geçin.",
+};
+
+type Quote = { subtotal: number; shipping: number; total: number };
+type SavedAddress = Database["public"]["Tables"]["addresses"]["Row"];
+
+function toOrderItems(items: CartItem[]) {
+  return items.map((i) => ({ productId: i.productId, variantId: i.variantId ?? null, quantity: i.quantity }));
+}
+
+type ApiJson = {
+  error?: string;
+  orderId?: string;
+  orderNumber?: string | null;
+  total?: number;
+  subtotal?: number;
+  shipping?: number;
+  action?: string;
+  fields?: Record<string, string>;
+};
+
+function readJson(res: Response): Promise<ApiJson> {
+  return res.json().catch(() => ({}));
+}
+
+/** Shopier ödeme formunu DOM üzerinden oluşturup gönderir (HTML enjekte etmeden). */
+function submitShopierForm(action: string, fields: Record<string, string>) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = action;
+  form.style.display = "none";
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
 
 export default function CheckoutPage() {
   const { user, profile } = useAuth();
   const { items, getTotal, clearCart } = useCartStore();
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [step, setStep] = useState<1 | 2>(1);
-  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | 'new'>('new');
   const [saveNewAddress, setSaveNewAddress] = useState(true);
 
@@ -34,18 +87,50 @@ export default function CheckoutPage() {
   });
 
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('card');
-  const [cardDetails, setCardDetails] = useState({
-    number: '',
-    name: '',
-    expiry: '',
-    cvv: ''
-  });
 
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successMethod, setSuccessMethod] = useState<'card' | 'cod'>('cod');
   const [orderCode, setOrderCode] = useState('');
   const [paidTotal, setPaidTotal] = useState<number>(0);
-  const [paidShipping, setPaidShipping] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [serverQuote, setServerQuote] = useState<Quote | null>(null);
+  const [quoteError, setQuoteError] = useState("");
+
+  // Shopier dönüşü: /odeme?odeme=basarili&siparis=... veya /odeme?odeme=hata&neden=...
+  // URL yalnızca istemcide okunabildiği için (SSR uyumu) durum effect içinde ayarlanır.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("odeme");
+    if (!result) return;
+
+    let pendingCart: CartItem[] | null = null;
+    try {
+      const raw = sessionStorage.getItem(PENDING_CART_KEY);
+      pendingCart = raw ? JSON.parse(raw) : null;
+      sessionStorage.removeItem(PENDING_CART_KEY);
+    } catch {
+      /* sessionStorage erişilemiyor */
+    }
+
+    if (result === "basarili") {
+      useCartStore.getState().clearCart();
+      setOrderCode(params.get("siparis") || "");
+      setSuccessMethod("card");
+      setSuccess(true);
+    } else if (result === "hata") {
+      const msg = PAYMENT_ERROR_MESSAGES[params.get("neden") || ""] || PAYMENT_ERROR_MESSAGES.payment_failed;
+      // Ödeme alınamadı: sepeti geri yükle
+      if (Array.isArray(pendingCart) && pendingCart.length > 0 && useCartStore.getState().items.length === 0) {
+        useCartStore.setState({ items: pendingCart });
+      }
+      setErrorMsg(msg);
+      toast.error(msg);
+    }
+    window.history.replaceState(null, "", "/odeme");
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Fetch Saved Addresses on load
   useEffect(() => {
@@ -59,17 +144,18 @@ export default function CheckoutPage() {
         }));
 
         // Fetch addresses from Supabase DB
-        const { data: userAddrs } = await supabase
-          .from("addresses" as any)
+        const { data: addrData } = await supabase
+          .from("addresses" as never)
           .select("*")
           .eq("user_id", user.id)
           .order("is_default", { ascending: false });
+        const userAddrs = addrData as SavedAddress[] | null;
 
         if (userAddrs && userAddrs.length > 0) {
           setSavedAddresses(userAddrs);
           
           // Select default or first address
-          const defaultAddr = userAddrs.find((a: any) => a.is_default) || userAddrs[0];
+          const defaultAddr = userAddrs.find((a) => a.is_default) || userAddrs[0];
           setSelectedAddressId(defaultAddr.id);
           
           setAddress({
@@ -89,7 +175,7 @@ export default function CheckoutPage() {
     loadUserAddresses();
   }, [user, profile, supabase]);
 
-  const handleSelectSavedAddress = (addr: any) => {
+  const handleSelectSavedAddress = (addr: SavedAddress) => {
     setSelectedAddressId(addr.id);
     setAddress({
       title: addr.title || 'Ev',
@@ -117,47 +203,88 @@ export default function CheckoutPage() {
     });
   };
 
-  const total = getTotal();
-  const kargo = total >= 1000 ? 0 : 50;
-  const finalTotal = total + kargo;
+  // Sepetteki (yerel) fiyatlar yalnızca gösterim içindir; asıl tutar sunucuda hesaplanır.
+  const localSubtotal = getTotal();
+  const localShipping = calculateShipping(localSubtotal);
+  const total = serverQuote?.subtotal ?? localSubtotal;
+  const kargo = serverQuote?.shipping ?? localShipping;
+  const finalTotal = serverQuote?.total ?? localSubtotal + localShipping;
+
+  const cartKey = JSON.stringify(toOrderItems(items));
+
+  // Ödeme adımında sunucunun hesapladığı tutarı göster (fiyat/indirim değişmiş olabilir)
+  useEffect(() => {
+    if (step !== 2 || !user || items.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/shop/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: JSON.parse(cartKey), preview: true }),
+        });
+        const data = await readJson(res);
+        if (cancelled) return;
+        if (res.ok && typeof data.total === "number") {
+          setQuoteError("");
+          setServerQuote({ subtotal: Number(data.subtotal), shipping: Number(data.shipping), total: data.total });
+        } else if (data.error) {
+          setServerQuote(null);
+          setQuoteError(data.error);
+        }
+      } catch {
+        /* önizleme başarısızsa yerel tutar gösterilir; sipariş anında sunucu yine doğrular */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, user?.id, cartKey]);
 
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.fullName || !address.phone || !address.line || !address.district) {
-      alert("Lütfen tüm zorunlu adres alanlarını doldurunuz.");
+      toast.error("Lütfen tüm zorunlu adres alanlarını doldurunuz.");
       return;
     }
     setStep(2);
   };
 
-  const generateOrderCode = () => {
-    const random = Math.floor(100000 + Math.random() * 900000);
-    return `VEL-ORD-${random}`;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
+    if (processing) return;
 
-    if (paymentMethod === 'card') {
-      if (!cardDetails.number || !cardDetails.name || !cardDetails.expiry || !cardDetails.cvv) {
-        alert("Lütfen tüm kart bilgilerinizi eksiksiz giriniz.");
-        return;
-      }
+    if (!user) {
+      toast.error("Sipariş verebilmek için lütfen giriş yapın.");
+      router.push("/giris?redirect=/odeme");
+      return;
     }
 
     setProcessing(true);
+    setErrorMsg("");
+    let redirecting = false;
 
     try {
-      // Capture actual paid totals BEFORE clearCart() is called!
-      const currentPaidTotal = finalTotal;
-      const currentPaidShipping = kargo;
-      setPaidTotal(currentPaidTotal);
-      setPaidShipping(currentPaidShipping);
+      // 1) Siparişi sunucuda oluştur (fiyatlar, stok ve kargo sunucuda hesaplanır)
+      const res = await fetch("/api/shop/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: toOrderItems(items), address, paymentMethod }),
+      });
+      const order = await readJson(res);
+      if (res.status === 401) {
+        router.push("/giris?redirect=/odeme");
+        throw new Error(order.error || "Sipariş verebilmek için lütfen giriş yapın.");
+      }
+      if (!res.ok || !order.orderId) {
+        throw new Error(order.error || "Sipariş oluşturulamadı. Lütfen tekrar deneyin.");
+      }
 
-      // Save new address if requested by user
-      if (user && selectedAddressId === 'new' && saveNewAddress) {
+      // Yeni adresi kaydet (sipariş başarıyla oluştuktan sonra; hata siparişi engellemez)
+      if (selectedAddressId === 'new' && saveNewAddress) {
         try {
-          await supabase.from("addresses" as any).insert({
+          await supabase.from("addresses" as never).insert({
             user_id: user.id,
             title: address.title || 'Ev Adresim',
             full_name: address.fullName,
@@ -167,71 +294,68 @@ export default function CheckoutPage() {
             address_line: address.line,
             postal_code: address.zip,
             is_default: savedAddresses.length === 0
-          });
+          } as never);
         } catch (addrErr) {
           console.error("Address auto-save error:", addrErr);
         }
       }
 
-      const code = generateOrderCode();
-      setOrderCode(code);
+      if (paymentMethod === 'card') {
+        // 2) Shopier ödeme formunu al (tutar sunucuda siparişten okunur)
+        const payRes = await fetch("/api/shopier/create-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.orderId }),
+        });
+        const pay = await readJson(payRes);
+        if (!payRes.ok || typeof pay.action !== "string" || !pay.fields) {
+          throw new Error(
+            pay.error
+              ? `${pay.error}. Siparişiniz "Ödeme Bekliyor" olarak kaydedildi; lütfen tekrar deneyin.`
+              : "Ödeme sayfası açılamadı. Lütfen tekrar deneyin."
+          );
+        }
 
-      const shippingAddressObj = {
-        title: address.title || 'Ev',
-        full_name: address.fullName,
-        phone: address.phone,
-        email: address.email,
-        city: address.city,
-        district: address.district,
-        address_line: address.line,
-        postal_code: address.zip
-      };
-
-      // 1. Create Order record in Supabase with exact DB schema
-      const { data: order, error: orderError } = await supabase.from("orders" as any).insert({
-        order_number: code,
-        user_id: user?.id || null,
-        status: "siparis_alindi",
-        subtotal: total,
-        shipping_cost: currentPaidShipping,
-        total: currentPaidTotal,
-        shipping_address: shippingAddressObj
-      }).select().single();
-
-      if (orderError) throw orderError;
-
-      // 2. Create Order Items with exact DB schema
-      if (order) {
-        const orderItems = items.map(item => ({
-          order_id: order.id,
-          product_id: item.productId || item.id,
-          variant_id: item.variantId || null,
-          product_name: item.name || "Ürün",
-          variant_info: item.variantInfo || "Standart",
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.price * item.quantity
-        }));
-
-        const { error: itemsError } = await supabase.from("order_items" as any).insert(orderItems);
-        if (itemsError) throw itemsError;
+        // 3) Sepeti yedekle, temizle ve Shopier'e yönlendir
+        try {
+          sessionStorage.setItem(PENDING_CART_KEY, JSON.stringify(items));
+        } catch {
+          /* yoksay */
+        }
+        redirecting = true;
+        clearCart();
+        submitShopierForm(pay.action, pay.fields);
+        return;
       }
 
-      // Clear cart & show success screen
-      clearCart();
+      // Kapıda ödeme: sipariş kesinleşti
+      setOrderCode(order.orderNumber || "");
+      setPaidTotal(Number(order.total) || finalTotal);
+      setSuccessMethod("cod");
       setSuccess(true);
+      clearCart();
     } catch (error) {
       console.error("Order submission failed:", error);
-      clearCart();
-      setSuccess(true);
+      const msg = error instanceof Error && error.message ? error.message : "Sipariş oluşturulamadı. Lütfen tekrar deneyin.";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
-      setProcessing(false);
+      if (!redirecting) setProcessing(false);
     }
   };
 
-  if (items.length === 0 && !success) {
+  const errorBanner = errorMsg ? (
+    <div role="alert" className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xs text-xs text-rose-800 flex items-start gap-2">
+      <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+      <span>{errorMsg}</span>
+    </div>
+  ) : null;
+
+  if (items.length === 0 && !success && !processing) {
     return (
       <div className="bg-[#FAFAF8] min-h-screen pt-44 md:pt-56 flex flex-col items-center justify-center p-4 font-inter text-center">
+        <Toaster position="top-center" />
+        {errorBanner}
         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 mb-4">
           <ShoppingBag className="w-8 h-8" />
         </div>
@@ -245,10 +369,11 @@ export default function CheckoutPage() {
   }
 
   if (success) {
-    const displayPaidTotal = paidTotal || finalTotal;
+    const displayPaidTotal = paidTotal;
 
     return (
       <div className="bg-[#FAFAF8] min-h-screen pt-44 md:pt-56 pb-20 font-inter">
+        <Toaster position="top-center" />
         <LuxuryConfetti active={true} duration={6000} />
         <motion.div 
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -289,9 +414,14 @@ export default function CheckoutPage() {
             transition={{ delay: 0.6 }}
             className="text-sm text-gray-600 mb-6 leading-relaxed max-w-md mx-auto"
           >
-            Sipariş numaranız: <span className="font-mono font-bold text-[#1A1A1A] bg-gray-200 px-2 py-0.5 rounded-xs">{orderCode}</span>. Sipariş detaylarınız hesabınızda yer almakta ve e-posta adresinize de gönderilecektir.
+            {successMethod === "card" ? "Ödemeniz alındı. " : ""}
+            {orderCode && (
+              <>Sipariş numaranız: <span className="font-mono font-bold text-[#1A1A1A] bg-gray-200 px-2 py-0.5 rounded-xs">{orderCode}</span>. </>
+            )}
+            Sipariş detaylarınız hesabınızda yer almakta ve e-posta adresinize de gönderilecektir.
           </motion.p>
 
+          {successMethod === "cod" && (
           <div className="bg-white p-6 rounded-xs border border-gray-200 text-left space-y-3 mb-8 shadow-xs text-xs">
             <h3 className="font-semibold text-[#1A1A1A] border-b pb-2 text-sm font-playfair">Teslimat & Ödeme Özetiniz</h3>
             <p><span className="font-semibold text-gray-900">Alıcı:</span> {address.fullName}</p>
@@ -300,10 +430,11 @@ export default function CheckoutPage() {
             <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
               <span className="font-bold text-[#1A1A1A] text-xs">Ödeme Tutarı:</span>
               <span className="font-bold text-sm text-[#1A1A1A] bg-amber-50 border border-amber-200 px-3 py-1 rounded-xs">
-                {displayPaidTotal.toLocaleString('tr-TR')} ₺ <span className="text-emerald-700 font-semibold text-xs ml-1">(Sipariş Alındı)</span>
+                {displayPaidTotal.toLocaleString('tr-TR')} ₺ <span className="text-emerald-700 font-semibold text-xs ml-1">(Kapıda Ödeme)</span>
               </span>
             </div>
           </div>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/" className="bg-[#1A1A1A] hover:bg-[#C5A572] text-white px-8 py-3 rounded-xs text-xs font-semibold uppercase tracking-wider transition-colors shadow-md">
@@ -320,12 +451,28 @@ export default function CheckoutPage() {
 
   return (
     <div className="bg-[#FAFAF8] min-h-screen pt-44 md:pt-52 pb-20 font-inter">
+      <Toaster position="top-center" />
       <div className="max-w-6xl mx-auto px-4">
         {/* Page Title */}
         <div className="text-center mb-10 pt-4">
           <h1 className="text-3xl md:text-4xl font-playfair font-semibold text-[#1A1A1A]">Güvenli Ödeme & Teslimat</h1>
           <p className="text-xs text-gray-500 mt-2">256-Bit SSL Sertifikalı Güvenli Ödeme Altyapısı</p>
         </div>
+
+        {errorBanner}
+        {quoteError && (
+          <div role="alert" className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xs text-xs text-amber-900 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{quoteError}</span>
+          </div>
+        )}
+        {!user && (
+          <div className="mb-6 p-4 bg-white border border-gray-200 rounded-xs text-xs text-gray-700">
+            Sipariş verebilmek için{" "}
+            <Link href="/giris?redirect=/odeme" className="font-semibold text-[#C5A572] underline">giriş yapmanız</Link>{" "}
+            gerekmektedir.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Main Steps Form */}
@@ -564,55 +711,11 @@ export default function CheckoutPage() {
 
                   {paymentMethod === 'card' ? (
                     <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">Kart Üzerindeki İsim *</label>
-                        <input
-                          type="text"
-                          required
-                          value={cardDetails.name}
-                          onChange={e => setCardDetails({ ...cardDetails, name: e.target.value })}
-                          placeholder="Ahmet Yılmaz"
-                          className="w-full p-2.5 border rounded-xs text-xs uppercase"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">Kart Numarası *</label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={19}
-                          value={cardDetails.number}
-                          onChange={e => setCardDetails({ ...cardDetails, number: e.target.value })}
-                          placeholder="0000 0000 0000 0000"
-                          className="w-full p-2.5 border rounded-xs text-xs font-mono"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-xs text-xs text-gray-700 leading-relaxed flex items-start gap-3">
+                        <Lock className="w-4 h-4 text-[#C5A572] flex-shrink-0 mt-0.5" />
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Son Kullanma (AA/YY) *</label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={5}
-                            value={cardDetails.expiry}
-                            onChange={e => setCardDetails({ ...cardDetails, expiry: e.target.value })}
-                            placeholder="12/28"
-                            className="w-full p-2.5 border rounded-xs text-xs font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Güvenlik Kodu (CVV) *</label>
-                          <input
-                            type="password"
-                            required
-                            maxLength={4}
-                            value={cardDetails.cvv}
-                            onChange={e => setCardDetails({ ...cardDetails, cvv: e.target.value })}
-                            placeholder="123"
-                            className="w-full p-2.5 border rounded-xs text-xs font-mono"
-                          />
+                          <p className="font-semibold text-[#1A1A1A]">Shopier güvencesiyle ödeme</p>
+                          <p className="mt-1">Siparişinizi onayladığınızda Shopier’in güvenli ödeme sayfasına yönlendirileceksiniz. Kart bilgileriniz yalnızca Shopier sayfasında girilir; sitemizde alınmaz veya saklanmaz.</p>
                         </div>
                       </div>
 
@@ -625,12 +728,12 @@ export default function CheckoutPage() {
                           {processing ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Siparişiniz İşleniyor...</span>
+                              <span>Ödeme Sayfasına Yönlendiriliyorsunuz...</span>
                             </>
                           ) : (
                             <>
                               <ShieldCheck className="w-4 h-4" />
-                              <span>Siparişi Onayla & Ödemeyi Tamamla ({finalTotal.toLocaleString('tr-TR')} ₺)</span>
+                              <span>Siparişi Onayla & Shopier ile Öde ({finalTotal.toLocaleString('tr-TR')} ₺)</span>
                             </>
                           )}
                         </button>
@@ -704,6 +807,9 @@ export default function CheckoutPage() {
                   <span>Genel Toplam</span>
                   <span>{finalTotal.toLocaleString('tr-TR')} ₺</span>
                 </div>
+                {serverQuote && Math.abs(serverQuote.total - (localSubtotal + localShipping)) > 0.009 && (
+                  <p className="text-[10px] text-amber-700">Ürün fiyatları güncellendi; geçerli tutar yukarıda gösterilmektedir.</p>
+                )}
               </div>
             </div>
           </div>

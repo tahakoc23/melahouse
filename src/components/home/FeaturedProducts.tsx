@@ -46,24 +46,17 @@ export default function FeaturedProducts({ products }: FeaturedProductsProps) {
   }
 
   return (
-    <section className="px-4 md:px-8 max-w-[1600px] mx-auto overflow-hidden py-12">
-      <div className="flex flex-col items-center mb-16">
-        <motion.h2 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.6 }}
-          className="font-playfair text-4xl md:text-5xl text-[#1A1A1A] mb-4 text-center"
-        >
-          Öne Çıkan Ürünler
-        </motion.h2>
-        <motion.div 
-          initial={{ scaleX: 0 }}
-          whileInView={{ scaleX: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="h-[1px] w-24 bg-[#C5A572]"
-        />
+    <section className="px-5 md:px-10 max-w-[1600px] mx-auto overflow-hidden">
+      <div className="flex items-end justify-between gap-6 border-b border-ink/15 pb-5 mb-8 md:mb-10">
+        <div>
+          <p className="eyebrow text-kul mb-3">Seçki</p>
+          <h2 className="font-display text-4xl md:text-6xl leading-none">
+            Öne <em className="text-murdum">çıkanlar</em>
+          </h2>
+        </div>
+        <Link href="/urunler" className="eyebrow link-couture hidden sm:inline-block whitespace-nowrap">
+          Tüm ürünler
+        </Link>
       </div>
 
       <motion.div 
@@ -84,20 +77,6 @@ export default function FeaturedProducts({ products }: FeaturedProductsProps) {
         ))}
       </motion.div>
 
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6, delay: 0.4 }}
-        className="flex justify-center mt-16"
-      >
-        <Link 
-          href="/urunler" 
-          className="inline-block border-b border-[#1A1A1A] pb-1 font-inter text-sm uppercase tracking-widest text-[#1A1A1A] hover:text-[#C5A572] hover:border-[#C5A572] transition-colors font-medium"
-        >
-          Tüm Ürünleri Gör
-        </Link>
-      </motion.div>
     </section>
   )
 }

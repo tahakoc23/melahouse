@@ -63,7 +63,6 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categories, setCategories] = useState<any[]>(DEFAULT_NAVIGATION_MENUS);
   const [activeHover, setActiveHover] = useState<string | null>(null);
-  const [isHomeLoading, setIsHomeLoading] = useState(false);
 
   const pathname = usePathname();
   const isHome = pathname === '/';
@@ -115,60 +114,16 @@ export default function Header() {
     fetchCategories();
   }, [supabase]);
 
-  // Home Loader lifecycle
-  const handleNavigateHome = (e: React.MouseEvent) => {
-    if (pathname !== '/') {
-      e.preventDefault();
-      setIsHomeLoading(true);
-      router.push('/');
-    }
-  };
-
-  useEffect(() => {
-    if (pathname === '/' && isHomeLoading) {
-      const timer = setTimeout(() => {
-        setIsHomeLoading(false);
-      }, 1600);
-      return () => clearTimeout(timer);
-    }
-  }, [pathname, isHomeLoading]);
-
-  const headerClass = scrolled
-    ? 'bg-[#FAFAF8]/95 backdrop-blur-md text-[#1A1A1A] shadow-sm'
-    : (isHome 
-        ? 'bg-gradient-to-b from-black/80 via-black/45 to-transparent text-white'
-        : 'bg-[#1A1A1A] text-white shadow-sm');
-
-  const useDarkTheme = !scrolled;
-  const textColorClass = useDarkTheme ? 'text-[#FAFAF8]' : 'text-[#1A1A1A]';
-  const iconColorClass = useDarkTheme ? 'text-[#FAFAF8]' : 'text-[#1A1A1A]';
-  const hoverColorClass = 'hover:text-[#C5A572]';
+  const useDarkTheme = isHome && !scrolled;
+  const headerClass = useDarkTheme
+    ? 'bg-gradient-to-b from-ink/60 via-ink/25 to-transparent text-white'
+    : 'bg-white/95 backdrop-blur-md text-ink border-b border-ink/10';
+  const textColorClass = useDarkTheme ? 'text-white' : 'text-ink';
+  const iconColorClass = useDarkTheme ? 'text-white' : 'text-ink';
+  const hoverColorClass = useDarkTheme ? 'hover:text-gold-light' : 'hover:text-murdum';
 
   return (
     <>
-      {/* Home Loader Overlay */}
-      <AnimatePresence>
-        {isHomeLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#FAFAF8] select-none"
-          >
-            <div className="flex flex-col items-center gap-6">
-              <h1 className="font-playfair text-4xl md:text-5xl tracking-[0.2em] text-[#1A1A1A] font-semibold">
-                MELA HOUSE
-              </h1>
-              <div className="w-10 h-10 relative">
-                <div className="absolute inset-0 border-2 border-transparent border-t-[#C5A572] rounded-full animate-spin"></div>
-                <div className="absolute inset-2 border-2 border-transparent border-b-[#A68B5B] rounded-full animate-spin-slow"></div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <header className={`fixed w-full top-0 z-50 transition-colors duration-300 ${headerClass}`}>
         <AnnouncementBar />
         
@@ -186,20 +141,20 @@ export default function Header() {
               </button>
               <button 
                 onClick={openSearch}
-                className={`hidden lg:flex items-center gap-2 p-2 transition-colors group cursor-pointer ${hoverColorClass}`}
+                className={`hidden lg:flex items-center gap-2 p-2 transition-colors group cursor-pointer ${textColorClass} ${hoverColorClass}`}
                 aria-label="Ara"
               >
-                <Search className={`w-5 h-5 ${iconColorClass} group-hover:text-[#C5A572] transition-colors`} />
+                <Search className="w-5 h-5" />
                 <span className={`text-xs font-inter uppercase tracking-widest hidden xl:inline-block font-medium ${textColorClass}`}>Ara</span>
               </button>
             </div>
 
             {/* Logo Centered */}
             <div className="flex-shrink-0 text-center flex items-center justify-center">
-              <Link href="/" onClick={handleNavigateHome} className="inline-flex items-center justify-center">
-                <h1 className={`font-playfair text-2xl md:text-4xl lg:text-5xl tracking-tight font-semibold transition-colors duration-300 ${textColorClass}`}>
+              <Link href="/" className="inline-flex items-center justify-center">
+                <span className={`font-display text-xl sm:text-2xl md:text-[2.1rem] tracking-[0.08em] sm:tracking-[0.16em] transition-colors duration-300 ${textColorClass}`}>
                   MELA HOUSE
-                </h1>
+                </span>
               </Link>
             </div>
 
@@ -216,7 +171,7 @@ export default function Header() {
               {isAdmin && (
                 <Link 
                   href="/admin" 
-                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-[#C5A572] text-white hover:bg-black transition-all text-xs font-inter uppercase tracking-wider rounded-xs font-medium shadow-md"
+                  className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 border text-[10px] uppercase tracking-[0.2em] font-medium transition-colors ${useDarkTheme ? 'border-white/40 text-white hover:bg-white hover:text-ink' : 'border-ink/20 text-ink hover:bg-ink hover:text-white'}`}
                   title="Yönetim Paneli"
                 >
                   <ShieldCheck className="w-4 h-4" />
@@ -230,7 +185,7 @@ export default function Header() {
                     href="/hesabim" 
                     className={`flex items-center gap-1.5 text-xs font-inter uppercase tracking-wider font-medium transition-colors ${textColorClass} ${hoverColorClass}`}
                   >
-                    <User className="w-4 h-4 text-[#C5A572]" />
+                    <User className="w-4 h-4" />
                     <span>{profile?.full_name?.split(' ')[0] || 'Hesabım'}</span>
                   </Link>
                   <button 
@@ -252,7 +207,7 @@ export default function Header() {
                   <span className={useDarkTheme ? 'text-white/40' : 'text-gray-300'}>|</span>
                   <Link 
                     href="/kayit" 
-                    className="text-[#C5A572] hover:text-white font-semibold transition-colors drop-shadow-xs"
+                    className={`font-semibold transition-colors ${textColorClass} ${hoverColorClass}`}
                   >
                     Kayıt Ol
                   </Link>
@@ -261,20 +216,20 @@ export default function Header() {
 
               <Link 
                 href="/favorilerim" 
-                className={`p-2 transition-colors hidden md:block ${hoverColorClass}`}
+                className={`p-2 transition-colors hidden md:block ${textColorClass} ${hoverColorClass}`}
                 title="Favorilerim"
               >
-                <Heart className={`w-5 h-5 ${iconColorClass} hover:text-[#C5A572] transition-colors`} />
+                <Heart className="w-5 h-5" />
               </Link>
 
               <button 
                 onClick={openCart}
-                className={`p-2 transition-colors relative flex items-center group cursor-pointer ${hoverColorClass}`}
+                className={`p-2 transition-colors relative flex items-center group cursor-pointer ${textColorClass} ${hoverColorClass}`}
                 aria-label="Sepet"
               >
-                <ShoppingBag className={`w-5 h-5 ${iconColorClass} group-hover:text-[#C5A572] transition-colors`} />
+                <ShoppingBag className="w-5 h-5" />
                 {cartItemCount > 0 && (
-                  <span className="absolute top-0 right-0 w-4 h-4 bg-[#C5A572] text-white text-[10px] font-bold flex items-center justify-center rounded-full shadow-xs">
+                  <span className="absolute top-0 right-0 w-4 h-4 bg-murdum text-white text-[10px] font-semibold flex items-center justify-center rounded-full">
                     {cartItemCount}
                   </span>
                 )}
@@ -286,8 +241,8 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation Menu */}
-          <nav className={`hidden lg:flex items-center justify-center space-x-10 h-12 font-inter text-xs uppercase tracking-widest font-medium border-t transition-colors duration-300 ${
-            useDarkTheme ? 'border-white/15' : 'border-gray-200/80'
+          <nav className={`hidden lg:flex items-center justify-center space-x-10 h-12 text-[11px] uppercase tracking-[0.22em] font-medium border-t transition-colors duration-300 ${
+            useDarkTheme ? 'border-white/15' : 'border-ink/10'
           }`}>
             {categories.map((cat) => (
               <div 
@@ -301,7 +256,7 @@ export default function Header() {
                   className={`flex items-center gap-1 transition-colors py-3 ${textColorClass} ${hoverColorClass}`}
                 >
                   {cat.title}
-                  {cat.subcategories && <ChevronDown className="w-3 h-3 text-[#C5A572]" />}
+                  {cat.subcategories && <ChevronDown className="w-3 h-3 opacity-60" />}
                 </Link>
                 
                 {/* Mega Menu Dropdown */}
@@ -313,14 +268,14 @@ export default function Header() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
                         transition={{ duration: 0.18 }}
-                        className="absolute top-full left-1/2 -translate-x-1/2 w-56 bg-white shadow-xl border border-gray-200 py-4 px-6 z-50 rounded-b-md text-[#1A1A1A]"
+                        className="absolute top-full left-1/2 -translate-x-1/2 w-60 bg-white shadow-[0_20px_40px_-20px_rgba(23,18,20,0.25)] border border-ink/10 py-5 px-7 z-50 text-ink"
                       >
                         <ul className="space-y-3">
                           {cat.subcategories.map((sub: any) => (
                             <li key={sub.id || sub.title}>
                               <Link 
                                 href={sub.path} 
-                                className="text-gray-600 hover:text-[#C5A572] transition-colors block text-xs font-medium uppercase tracking-wider"
+                                className="text-kul hover:text-ink transition-colors block text-sm normal-case tracking-normal font-normal"
                               >
                                 {sub.title}
                               </Link>
@@ -353,11 +308,11 @@ export default function Header() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'tween', duration: 0.3 }}
-              className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-[#FAFAF8] z-[70] shadow-2xl flex flex-col lg:hidden"
+              className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-white z-[70] shadow-2xl flex flex-col lg:hidden"
             >
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <Link href="/" onClick={(e) => { handleNavigateHome(e); setMobileMenuOpen(false); }}>
-                  <h2 className="font-playfair text-2xl font-semibold text-[#1A1A1A]">MELA HOUSE</h2>
+                <Link href="/" onClick={() => setMobileMenuOpen(false)}>
+                  <span className="font-display text-2xl tracking-[0.14em] text-ink">MELA HOUSE</span>
                 </Link>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
@@ -386,7 +341,7 @@ export default function Header() {
                     <Link 
                       href="/kayit" 
                       onClick={() => setMobileMenuOpen(false)}
-                      className="flex-1 py-2.5 text-center bg-[#C5A572] text-white font-medium uppercase tracking-wider rounded-xs"
+                      className="flex-1 py-2.5 text-center border border-ink text-ink font-medium uppercase tracking-wider"
                     >
                       Kayıt Ol
                     </Link>
@@ -413,9 +368,9 @@ export default function Header() {
                               key={sub.id || sub.title}
                               href={sub.path}
                               onClick={() => setMobileMenuOpen(false)}
-                              className="block py-1.5 text-gray-600 hover:text-[#C5A572] text-[11px] uppercase tracking-wider font-medium"
+                              className="block py-1.5 text-kul hover:text-ink text-sm"
                             >
-                              • {sub.title}
+                              {sub.title}
                             </Link>
                           ))}
                         </div>
@@ -427,18 +382,18 @@ export default function Header() {
 
               <div className="p-6 bg-gray-50 border-t border-gray-200 flex flex-col gap-3 font-inter">
                 {isAdmin && (
-                  <Link href="/admin" className="flex items-center justify-center gap-2 text-white font-semibold bg-[#C5A572] px-4 py-3 rounded-xs text-xs uppercase tracking-wider" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/admin" className="flex items-center justify-center gap-2 text-white font-semibold bg-ink px-4 py-3 text-xs uppercase tracking-wider" onClick={() => setMobileMenuOpen(false)}>
                     <ShieldCheck className="w-4 h-4 text-white" />
                     <span>Yönetim Paneli</span>
                   </Link>
                 )}
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <Link href={user ? '/hesabim' : '/giris'} className="flex items-center justify-center gap-2 text-[#1A1A1A] font-medium text-xs bg-white border border-gray-200 py-2.5 rounded-xs" onClick={() => setMobileMenuOpen(false)}>
-                    <User className="w-4 h-4 text-[#C5A572]" />
+                    <User className="w-4 h-4" />
                     <span>{user ? 'Hesabım' : 'Giriş Yap'}</span>
                   </Link>
                   <Link href="/favorilerim" className="flex items-center justify-center gap-2 text-[#1A1A1A] font-medium text-xs bg-[#1A1A1A] text-white py-2.5 rounded-xs" onClick={() => setMobileMenuOpen(false)}>
-                    <Heart className="w-4 h-4 text-[#C5A572]" />
+                    <Heart className="w-4 h-4" />
                     <span>Favorilerim</span>
                   </Link>
                 </div>

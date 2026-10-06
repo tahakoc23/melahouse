@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import JsonLd from '@/components/seo/JsonLd';
 
 export const metadata: Metadata = {
-  title: 'Hakkımızda | MELA HOUSE',
+  title: 'Hakkımızda',
   description: 'MELA HOUSE lüks kadın giyim markasının hikayesi ve vizyonu.',
 };
 

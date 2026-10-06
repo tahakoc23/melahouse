@@ -8,6 +8,7 @@ import { isVideoUrl, getMediaType, getYoutubeEmbedUrl } from '@/components/admin
 
 interface ProductGalleryProps {
   images: { id: string; image_url: string; alt_text?: string }[];
+  productName?: string;
 }
 
 function InstagramIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -30,7 +31,7 @@ function ExternalLinkIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-export default function ProductGallery({ images }: ProductGalleryProps) {
+export default function ProductGallery({ images, productName = '' }: ProductGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [isHovered, setIsHovered] = useState(false);
@@ -38,7 +39,18 @@ export default function ProductGallery({ images }: ProductGalleryProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   if (!images || images.length === 0) {
-    return <div className="aspect-[3/4] w-full bg-gray-100 flex items-center justify-center font-inter text-gray-400">Görsel Yok</div>;
+    // Neutral, on-brand placeholder (no stock/demo photos)
+    return (
+      <div
+        role="img"
+        aria-label={productName ? `${productName} — görsel yakında` : 'Görsel yakında'}
+        className="aspect-[3/4] w-full bg-[#F3F0EA] border border-[#E8E2D6] flex flex-col items-center justify-center gap-3 font-inter select-none"
+      >
+        <span className="font-playfair text-2xl tracking-[0.35em] text-[#C5A572]/70">MELA HOUSE</span>
+        <span className="h-px w-12 bg-[#C5A572]/40" />
+        <span className="text-[11px] uppercase tracking-[0.25em] text-gray-400">Görsel yakında</span>
+      </div>
+    );
   }
 
   const currentMediaUrl = images[currentIndex]?.image_url || '';
@@ -114,7 +126,7 @@ export default function ProductGallery({ images }: ProductGalleryProps) {
                   <Image
                     unoptimized
                     src={image.image_url}
-                    alt={image.alt_text || 'Thumbnail'}
+                    alt={image.alt_text || (productName ? `${productName} - görsel ${index + 1}` : 'Ürün görseli')}
                     fill
                     className="object-cover"
                     sizes="80px"
@@ -205,7 +217,7 @@ export default function ProductGallery({ images }: ProductGalleryProps) {
                 <Image
                   unoptimized
                   src={currentMediaUrl}
-                  alt={images[currentIndex]?.alt_text || 'Product Image'}
+                  alt={images[currentIndex]?.alt_text || productName || 'Ürün görseli'}
                   fill
                   className="object-cover pointer-events-none"
                   sizes="(max-width: 768px) 100vw, 50vw"
@@ -296,7 +308,7 @@ export default function ProductGallery({ images }: ProductGalleryProps) {
               <Image
                 unoptimized
                 src={currentMediaUrl}
-                alt="Product High Res Lightbox"
+                alt={images[currentIndex]?.alt_text || productName || 'Ürün görseli'}
                 fill
                 className="object-contain"
                 sizes="100vw"

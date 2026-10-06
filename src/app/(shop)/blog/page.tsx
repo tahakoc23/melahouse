@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { BLOG_POSTS } from '@/lib/blogData'
 
 export const metadata: Metadata = {
-  title: 'Stil Rehberi & Kadın Giyim Kombin Önerileri | MELA HOUSE',
+  title: 'Stil Rehberi & Kadın Giyim Kombin Önerileri',
   description: 'MELA HOUSE Stil Rehberi: Kadın giyim, elbise modelleri, abiye modelleri, ofis kombinleri, yazlık elbise, trençkot ve güvenilir kadın giyim siteleri rehberi.',
 }
 

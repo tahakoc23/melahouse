@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { MAX_QUANTITY_PER_ITEM } from '@/lib/constants';
 
 export type CartItem = {
   id: string;
@@ -13,6 +14,12 @@ export type CartItem = {
   slug: string;
   maxStock?: number;
 };
+
+/** Kalem için izin verilen en yüksek adet: stok (biliniyorsa) ile genel üst sınırın küçüğü. */
+const quantityCap = (maxStock?: number) =>
+  typeof maxStock === 'number' && Number.isFinite(maxStock) && maxStock >= 0
+    ? Math.min(Math.floor(maxStock), MAX_QUANTITY_PER_ITEM)
+    : MAX_QUANTITY_PER_ITEM;
 
 interface CartState {
   items: CartItem[];
@@ -39,17 +46,24 @@ export const useCartStore = create<CartState>()(
 
           if (existingItemIndex > -1) {
             const newItems = [...state.items];
-            const currentQuantity = newItems[existingItemIndex].quantity;
-            const maxStock = item.maxStock ?? Infinity;
-            
-            newItems[existingItemIndex].quantity = Math.min(
-              currentQuantity + item.quantity,
-              maxStock
-            );
+            const existing = newItems[existingItemIndex];
+            const maxStock = item.maxStock ?? existing.maxStock;
+            const cap = quantityCap(maxStock);
+
+            newItems[existingItemIndex] = {
+              ...existing,
+              maxStock,
+              quantity: Math.max(1, Math.min(existing.quantity + item.quantity, cap)),
+            };
             return { items: newItems, isOpen: true };
           }
-          
-          return { items: [...state.items, item], isOpen: true };
+
+          const cap = quantityCap(item.maxStock);
+          if (cap < 1) return { isOpen: true };
+          return {
+            items: [...state.items, { ...item, quantity: Math.max(1, Math.min(item.quantity, cap)) }],
+            isOpen: true,
+          };
         });
       },
       removeItem: (id) => {
@@ -58,10 +72,12 @@ export const useCartStore = create<CartState>()(
         }));
       },
       updateQuantity: (id, quantity) => {
-        if (quantity < 1) return;
+        if (!Number.isFinite(quantity) || quantity < 1) return;
         set((state) => ({
           items: state.items.map((item) =>
-            item.id === id ? { ...item, quantity } : item
+            item.id === id
+              ? { ...item, quantity: Math.max(1, Math.min(Math.floor(quantity), quantityCap(item.maxStock))) }
+              : item
           ),
         }));
       },

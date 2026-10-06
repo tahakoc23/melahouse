@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
 import { X, Upload, Film, Link as LinkIcon, Plus, GripVertical, Video, ExternalLink } from 'lucide-react'
@@ -49,6 +49,32 @@ export function getYoutubeEmbedUrl(url: string): string | null {
   return null;
 }
 
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'avi'];
+
+const MIME_EXTENSION: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/x-msvideo': 'avi',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+/** Lower-cased file extension of a URL's path (ignores query string and hash). */
+function getUrlExtension(url: string): string {
+  let path = url;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    path = url.split(/[?#]/)[0];
+  }
+  const last = path.split('/').pop() || '';
+  const dot = last.lastIndexOf('.');
+  return dot >= 0 ? last.slice(dot + 1).toLowerCase() : '';
+}
+
 export function getMediaType(url: string): 'image' | 'video' | 'instagram' | 'youtube' {
   if (!url) return 'image';
   const lower = url.toLowerCase();
@@ -58,18 +84,10 @@ export function getMediaType(url: string): 'image' | 'video' | 'instagram' | 'yo
   if (lower.includes('youtube.com/watch') || lower.includes('youtu.be/')) {
     return 'youtube';
   }
-  if (
-    url.startsWith('data:video/') || 
-    url.startsWith('blob:') ||
-    lower.endsWith('.mp4') || 
-    lower.endsWith('.webm') || 
-    lower.endsWith('.mov') || 
-    lower.endsWith('.avi') ||
-    lower.includes('/video') ||
-    lower.includes('video/')
-  ) {
-    return 'video';
-  }
+  // Decide by MIME (data URLs) or by the real file extension — never by a
+  // "video" substring, which matched folder/product names like ".../video-elbise.jpg".
+  if (lower.startsWith('data:video/')) return 'video';
+  if (VIDEO_EXTENSIONS.includes(getUrlExtension(url))) return 'video';
   return 'image';
 }
 
@@ -91,9 +109,26 @@ export default function ImageUploader({
   const [progress, setProgress] = useState(0)
   const [customUrl, setCustomUrl] = useState('')
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [urlError, setUrlError] = useState<string | null>(null)
   const supabase = createClient()
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  // Always call the latest callback / see the latest count, even when an
+  // upload started several renders ago (avoids stale-closure overwrites).
+  const onUploadSuccessRef = useRef(onUploadSuccess)
+  const existingCountRef = useRef(existingImages.length)
+  useEffect(() => {
+    onUploadSuccessRef.current = onUploadSuccess
+    existingCountRef.current = existingImages.length
+  })
+
+  const remainingSlots = Math.max(0, maxFiles - existingImages.length)
+
+  const onDrop = useCallback(async (droppedFiles: File[]) => {
+    const slots = Math.max(0, maxFiles - existingCountRef.current)
+    const acceptedFiles = droppedFiles.slice(0, slots)
+    if (droppedFiles.length > slots) {
+      alert(`En fazla ${maxFiles} medya eklenebilir. ${droppedFiles.length - slots} dosya atlandı.`)
+    }
     if (acceptedFiles.length === 0) return
 
     setUploading(true)
@@ -103,16 +138,18 @@ export default function ImageUploader({
     try {
       for (let i = 0; i < acceptedFiles.length; i++) {
         const file = acceptedFiles[i]
-        const fileExt = file.name.split('.').pop()
+        const nameExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
+        const fileExt = nameExt || MIME_EXTENSION[file.type] || 'bin'
         const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
         const filePath = folder ? `${folder}/${fileName}` : fileName
+        const isVideoFile = file.type.startsWith('video/') || VIDEO_EXTENSIONS.includes(fileExt)
 
         const { error: uploadError } = await supabase.storage
           .from(bucket)
           .upload(filePath, file, {
             cacheControl: '3600',
             upsert: true,
-            contentType: file.type || (file.name.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg')
+            contentType: file.type || (isVideoFile ? 'video/mp4' : 'image/jpeg')
           })
 
         if (!uploadError) {
@@ -129,7 +166,7 @@ export default function ImageUploader({
       }
 
       if (uploadedUrls.length > 0) {
-        onUploadSuccess(uploadedUrls)
+        onUploadSuccessRef.current(uploadedUrls)
       }
     } catch (error: any) {
       console.error('Upload error:', error)
@@ -138,7 +175,7 @@ export default function ImageUploader({
       setUploading(false)
       setProgress(0)
     }
-  }, [bucket, folder, onUploadSuccess, supabase])
+  }, [bucket, folder, maxFiles, supabase])
 
   const handleAddCustomUrl = (e?: React.SyntheticEvent) => {
     if (e) {
@@ -147,6 +184,19 @@ export default function ImageUploader({
     }
     const trimmed = customUrl.trim();
     if (!trimmed) return;
+    if (existingImages.length >= maxFiles) {
+      setUrlError(`En fazla ${maxFiles} medya eklenebilir. Yeni eklemek için önce birini silin.`);
+      return;
+    }
+    if (!/^https?:\/\//i.test(trimmed)) {
+      setUrlError('Lütfen http:// veya https:// ile başlayan geçerli bir bağlantı girin.');
+      return;
+    }
+    if (existingImages.includes(trimmed)) {
+      setUrlError('Bu bağlantı zaten ekli.');
+      return;
+    }
+    setUrlError(null);
     onUploadSuccess([trimmed]);
     setCustomUrl('');
   };
@@ -165,8 +215,7 @@ export default function ImageUploader({
       'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.gif'],
       'video/*': ['.mp4', '.webm', '.mov', '.avi']
     },
-    maxFiles: maxFiles - existingImages.length,
-    disabled: uploading || existingImages.length >= maxFiles
+    disabled: uploading || remainingSlots === 0
   })
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -206,7 +255,7 @@ export default function ImageUploader({
             <input
               type="text"
               value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
+              onChange={(e) => { setCustomUrl(e.target.value); setUrlError(null); }}
               onKeyDown={handleKeyDown}
               placeholder="https://instagram.com/reel/..., https://youtube.com/... veya https://.../video.mp4"
               className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#C5A572]"
@@ -221,6 +270,7 @@ export default function ImageUploader({
             <span>Ekle</span>
           </button>
         </div>
+        {urlError && <p role="alert" className="text-[11px] font-semibold text-rose-700">{urlError}</p>}
       </div>
 
       {/* Drag & Drop File Upload Area */}

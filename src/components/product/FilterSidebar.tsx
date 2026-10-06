@@ -3,49 +3,7 @@
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Check, RotateCcw, SlidersHorizontal } from 'lucide-react';
-
-const CATEGORY_TREE = [
-  { 
-    name: 'Üst Giyim', 
-    slug: 'ust-giyim',
-    subcategories: [
-      { name: 'Elbise', slug: 'elbise' },
-      { name: 'Gömlek', slug: 'gomlek' },
-      { name: 'T-Shirt', slug: 't-shirt' },
-      { name: 'Crop', slug: 'crop' },
-      { name: 'Kimono', slug: 'kimono' },
-      { name: 'Sweatshirt', slug: 'sweatshirt' },
-    ]
-  },
-  { 
-    name: 'Alt Giyim', 
-    slug: 'alt-giyim',
-    subcategories: [
-      { name: 'Pantolon', slug: 'pantolon' },
-      { name: 'Etek', slug: 'etek' },
-      { name: 'Şort', slug: 'sort' },
-      { name: 'Tayt', slug: 'tayt' },
-      { name: 'Eşofman', slug: 'esofman' },
-      { name: 'Tulum', slug: 'tulum' },
-    ]
-  },
-  { name: 'İç Giyim', slug: 'ic-giyim' },
-  { 
-    name: 'Dış Giyim', 
-    slug: 'dis-giyim',
-    subcategories: [
-      { name: 'Trençkot', slug: 'trenckot' },
-      { name: 'Ceket', slug: 'ceket' },
-      { name: 'Kaban', slug: 'kaban' },
-      { name: 'Yelek', slug: 'yelek' },
-      { name: 'Mont', slug: 'mont' },
-    ]
-  },
-  { name: 'Takımlar', slug: 'takimlar' }
-];
-
-const ALL_LETTER_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'STD'];
-const ALL_NUMBER_SIZES = ['32', '34', '36', '38', '40', '42', '44', '46', '48', '50'];
+import { CATEGORY_TREE } from './catalog';
 
 const SORT_OPTIONS = [
   { value: 'en-yeni', label: 'En Yeni Gelenler' },
@@ -73,7 +31,7 @@ export default function FilterSidebar({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const [sizeTab, setSizeTab] = useState<'letter' | 'number'>('letter');
+  const [sizeTabChoice, setSizeTab] = useState<'letter' | 'number' | null>(null);
 
   const currentCategory = searchParams.get('category') || (pathname.startsWith('/kategori/') ? pathname.replace('/kategori/', '') : '');
   const currentSort = searchParams.get('sort') || 'en-yeni';
@@ -81,13 +39,13 @@ export default function FilterSidebar({
   const currentSizes = searchParams.getAll('size');
 
   // STRICTLY filter letter & number sizes: ONLY render sizes that exist in active products!
-  const displayLetterSizes = availableSizes.length > 0
-    ? ALL_LETTER_SIZES.filter(s => availableSizes.includes(s))
-    : [];
+  // Sizes come from real variants (already ordered by the server); numeric ones go to the Numara tab
+  const isNumericSize = (s: string) => /^\d+$/.test(s);
+  const displayLetterSizes = availableSizes.filter(s => !isNumericSize(s));
 
-  const displayNumberSizes = availableSizes.length > 0
-    ? ALL_NUMBER_SIZES.filter(s => availableSizes.includes(s))
-    : [];
+  const displayNumberSizes = availableSizes.filter(isNumericSize);
+  // Default to whichever tab actually has sizes
+  const sizeTab = sizeTabChoice ?? (displayLetterSizes.length > 0 ? 'letter' : 'number');
 
   const updateParam = (key: string, value: string, isMultiple = false) => {
     const params = new URLSearchParams(searchParams.toString());

@@ -16,75 +16,57 @@ interface LookbookSectionProps {
   content?: LookbookContent | null
 }
 
+// Admin panelinde "lookbook" içeriği girilmediğinde gösterilen marka bölümü
 const DEFAULT_LOOKBOOK: LookbookContent = {
-  title: 'Zamansız Zarafet',
-  image_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop',
-  description: 'MELA HOUSE, saf ipek dokunuşları, kusursuz işçilik ve modern siluetlerle kadının gücünü ve zarafetini ortaya çıkarıyor. Her bir tasarım, zamana meydan okuyan benzersiz bir lüks deneyimi sunmak üzere özenle el işçiliğiyle hazırlandı.',
-  link_url: '/hakkimizda'
+  title: 'Az parça, doğru parça.',
+  image_url: 'https://images.unsplash.com/photo-1637248666370-70a4a603c23e?q=80&w=1400&auto=format&fit=crop',
+  description:
+    'MELA HOUSE, günlükten davete uzanan bir kadın gardırobunu kumaşı ve kalıbı özenle seçilmiş parçalarla kurar. Koleksiyonlarımızı her sezon küçük ve seçkin tutuyoruz; böylece her parça diğerleriyle kolayca eşleşir.',
+  link_url: '/hakkimizda',
 }
 
+const ease = [0.22, 1, 0.36, 1] as const
+
 export default function LookbookSection({ content }: LookbookSectionProps) {
-  const displayContent = content || DEFAULT_LOOKBOOK
+  const c = content || DEFAULT_LOOKBOOK
 
   return (
-    <section className="px-4 md:px-8 max-w-[1400px] mx-auto py-16 overflow-hidden">
-      <div className="flex flex-col md:flex-row items-center gap-12 md:gap-24">
-        
-        <div className="w-full md:w-1/2 relative h-[500px] md:h-[700px] overflow-hidden rounded-sm group">
+    <section className="bg-murdum text-white" aria-labelledby="marka-baslik">
+      <div className="max-w-[1600px] mx-auto grid md:grid-cols-12 items-stretch">
+        <div className="relative md:col-span-5 aspect-[4/5] md:aspect-auto md:min-h-[640px] overflow-hidden">
           <Image
-            src={displayContent.image_url}
-            alt={displayContent.title}
+            src={c.image_url}
+            alt=""
             fill
-            className="object-cover transition-transform duration-1000 group-hover:scale-105"
+            sizes="(min-width: 768px) 42vw, 100vw"
+            className="object-cover"
           />
-          <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors duration-500" />
         </div>
 
-        <div className="w-full md:w-1/2 flex flex-col justify-center">
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
+        <div className="md:col-span-7 flex flex-col justify-center px-6 py-16 md:px-20 lg:px-28">
+          <p className="eyebrow text-gold-light mb-8">Felsefemiz</p>
+          <motion.h2
+            id="marka-baslik"
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="font-playfair text-4xl md:text-6xl text-[#1A1A1A] mb-8"
+            transition={{ duration: 1, ease }}
+            className="font-display italic text-5xl md:text-7xl lg:text-8xl leading-[0.95] mb-10"
           >
-            {displayContent.title}
+            {c.title}
           </motion.h2>
-          
-          <motion.div 
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="h-[1px] w-16 bg-[#C5A572] mb-8 origin-left"
-          />
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="prose prose-lg font-inter text-gray-600 mb-12"
-          >
-            <p className="leading-relaxed">
-              {displayContent.description}
-            </p>
-          </motion.div>
-
-          <motion.div
+          <motion.p
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.5 }}
+            transition={{ duration: 1, delay: 0.2 }}
+            className="text-white/75 text-base md:text-lg leading-relaxed max-w-xl mb-12 font-light"
           >
-            <Link 
-              href={displayContent.link_url || '/hakkimizda'} 
-              className="inline-flex items-center gap-4 text-[#1A1A1A] hover:text-[#C5A572] transition-colors group"
-            >
-              <span className="font-inter text-sm uppercase tracking-widest font-medium">Hikayemizi Keşfet</span>
-              <span className="h-[1px] w-12 bg-[#1A1A1A] group-hover:bg-[#C5A572] transition-colors" />
-            </Link>
-          </motion.div>
+            {c.description}
+          </motion.p>
+          <Link href={c.link_url || '/hakkimizda'} className="eyebrow link-couture self-start text-white">
+            Hikayemiz
+          </Link>
         </div>
       </div>
     </section>

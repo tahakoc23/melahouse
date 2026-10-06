@@ -1,11 +1,15 @@
 // @ts-nocheck
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
 
@@ -28,6 +32,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
     const body = await request.json();

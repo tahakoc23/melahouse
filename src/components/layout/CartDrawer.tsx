@@ -6,12 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Plus, Minus } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { calculateShipping, SHIPPING_FEE } from '@/lib/constants';
 
 export default function CartDrawer() {
   const { isCartOpen, toggleCart } = useUIStore();
   const { items, removeItem, updateQuantity, getTotal } = useCartStore();
 
   const total = getTotal();
+  const shipping = calculateShipping(total);
 
   const closeCart = () => toggleCart(false);
 
@@ -143,12 +145,12 @@ export default function CartDrawer() {
                 </div>
                 <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>Kargo</span>
-                  <span>{total > 1000 ? 'Ücretsiz' : 'Standart Kargo (50 ₺)'}</span>
+                  <span>{shipping === 0 ? 'Ücretsiz' : `Standart Kargo (${SHIPPING_FEE} ₺)`}</span>
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                   <span className="font-playfair text-xl font-semibold text-[#1A1A1A]">Toplam</span>
                   <span className="font-playfair text-xl font-semibold text-[#1A1A1A]">
-                    {(total > 1000 ? total : total + 50).toLocaleString('tr-TR')} ₺
+                    {(total + shipping).toLocaleString('tr-TR')} ₺
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 pt-4">

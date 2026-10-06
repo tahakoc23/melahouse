@@ -1,11 +1,15 @@
 // @ts-nocheck
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
 
@@ -33,6 +37,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const { orderId } = await req.json();
 
@@ -42,16 +49,41 @@ export async function POST(req: Request) {
 
     const adminClient = createAdminClient();
 
-    const { error: updateErr } = await adminClient
+    // Only allow transition iade_talebi -> iade_edildi
+    const { data: order, error: fetchErr } = await adminClient
+      .from("orders")
+      .select("id, status")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
+
+    if (!order) {
+      return NextResponse.json({ error: "Sipariş bulunamadı." }, { status: 404 });
+    }
+
+    if (order.status !== "iade_talebi") {
+      return NextResponse.json({ error: "Yalnızca iade talebi bulunan siparişler onaylanabilir." }, { status: 400 });
+    }
+
+    const { data: updatedRows, error: updateErr } = await adminClient
       .from("orders")
       .update({
         status: "iade_edildi",
         updated_at: new Date().toISOString()
       })
-      .eq("id", orderId);
+      .eq("id", orderId)
+      .eq("status", "iade_talebi")
+      .select("id");
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json({ error: "Yalnızca iade talebi bulunan siparişler onaylanabilir." }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, message: "İade onaylandı ve tamamlandı." });

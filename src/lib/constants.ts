@@ -5,6 +5,17 @@ export const INSTAGRAM_URL = 'https://instagram.com/melahouse.official'
 export const INSTAGRAM_HANDLE = '@melahouse.official'
 export const SITE_EMAIL = 'info@melahouse.net'
 
+// Kargo: tek kaynak. Ara toplam FREE_SHIPPING_THRESHOLD ve üzeriyse kargo ücretsiz.
+export const FREE_SHIPPING_THRESHOLD = 1000
+export const SHIPPING_FEE = 50
+
+export function calculateShipping(subtotal: number): number {
+  return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE
+}
+
+// Sepette tek kalem için izin verilen en yüksek adet (stok bilgisi yoksa da geçerli üst sınır)
+export const MAX_QUANTITY_PER_ITEM = 10
+
 
 export const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
   odeme_bekliyor: { label: 'Ödeme Bekliyor', color: 'bg-yellow-100 text-yellow-800' },

@@ -3,6 +3,7 @@
 
 import { useCartStore } from "@/stores/cartStore";
 import { formatPrice } from "@/lib/utils";
+import { calculateShipping } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 import { Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +13,7 @@ export default function CartPage() {
   const { items, removeItem, updateQuantity, getTotal, getItemCount } = useCartStore();
 
   const total = getTotal();
-  const kargo = total > 500 ? 0 : 50;
+  const kargo = calculateShipping(total);
 
   return (
     <div className="bg-[#FAFAF8] min-h-screen pt-28 md:pt-36">

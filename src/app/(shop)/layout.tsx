@@ -1,7 +1,5 @@
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
-import CartDrawer from '@/components/layout/CartDrawer'
-import SearchOverlay from '@/components/layout/SearchOverlay'
 import PageViewTracker from '@/components/layout/PageViewTracker'
 
 export default function ShopLayout({
@@ -17,8 +15,7 @@ export default function ShopLayout({
         {children}
       </main>
       <Footer />
-      <CartDrawer />
-      <SearchOverlay />
+      {/* CartDrawer ve SearchOverlay <Header /> içinde mount ediliyor */}
     </>
   )
 }

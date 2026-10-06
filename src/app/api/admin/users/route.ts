@@ -1,11 +1,15 @@
 // @ts-nocheck
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
 
@@ -51,6 +55,9 @@ export async function GET() {
 
 // PATCH - Edit User (email, password, full_name, role)
 export async function PATCH(request: Request) {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
     const { userId, email, password, full_name, role } = await request.json();
@@ -83,6 +90,9 @@ export async function PATCH(request: Request) {
 
 // DELETE - Delete User by ID
 export async function DELETE(request: Request) {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
     const { searchParams } = new URL(request.url);

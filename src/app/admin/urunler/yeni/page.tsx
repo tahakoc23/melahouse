@@ -5,8 +5,11 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ImageUploader from '@/components/admin/ImageUploader'
+import PriceResearchButton from '@/components/admin/PriceResearchButton'
 import AdminNotificationModal from '@/components/ui/AdminNotificationModal'
-import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Building2, ShieldCheck, Check, Sparkles, CheckCircle2 } from 'lucide-react'
+import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Building2, ShieldCheck, Check, Sparkles } from 'lucide-react'
+import { parseTurkishPrice, formatTurkishPrice, sanitizePriceInput, validatePrices } from '../_lib/price'
+import { slugifyTr, pickUniqueSlug, generateMainSku, nextVariantSku } from '../_lib/slug'
 
 const CATEGORY_OPTIONS = [
   { group: 'Üst Giyim', options: ['Üst Giyim', 'Elbise', 'Gömlek', 'T-Shirt', 'Crop', 'Kimono', 'Sweatshirt'] },
@@ -36,14 +39,6 @@ const PARENT_CATEGORY_MAP: Record<string, string> = {
   'Mont': 'Dış Giyim',
 };
 
-const LETTER_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'STD'];
-const NUMBER_SIZES = ['32', '34', '36', '38', '40', '42', '44', '46', '48', '50'];
-
-function generateUniqueSKU() {
-  const randomStr = Math.random().toString(36).substring(2, 7).toUpperCase();
-  return `VEL-${new Date().getFullYear()}-${randomStr}`;
-}
-
 function NewProductForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -68,6 +63,9 @@ function NewProductForm() {
   // Price Display States
   const [displayBasePrice, setDisplayBasePrice] = useState('2.000')
   const [displaySalePrice, setDisplaySalePrice] = useState('')
+  const [priceError, setPriceError] = useState<string | null>(null)
+  // Slug follows the name until the admin edits the slug field by hand
+  const [slugTouched, setSlugTouched] = useState(false)
 
   // Custom Modal State
   const [modalConfig, setModalConfig] = useState<{
@@ -103,7 +101,7 @@ function NewProductForm() {
   })
   
   const [images, setImages] = useState<string[]>([])
-  const [mainSku, setMainSku] = useState(generateUniqueSKU())
+  const [mainSku, setMainSku] = useState(() => generateMainSku())
 
   const [variants, setVariants] = useState<any[]>([
     { color_name: 'Siyah', color_hex: '#1A1A1A', size: 'S', sku: `${mainSku}-1`, stock_quantity: 10, price_override: null }
@@ -111,10 +109,10 @@ function NewProductForm() {
 
   useEffect(() => {
     async function fetchData() {
-      const { data: cats } = await supabase.from('categories' as any).select('id, name, slug').order('name')
+      const { data: cats } = await supabase.from('categories').select('id, name, slug').order('name')
       setDbCategories(cats || [])
 
-      const { data: sups } = await supabase.from('suppliers' as any).select('id, name, domain').order('name')
+      const { data: sups } = await supabase.from('suppliers').select('id, name, domain').order('name')
       setDbSuppliers(sups || [])
     }
     fetchData()
@@ -127,7 +125,7 @@ function NewProductForm() {
 
       try {
         const { data: supProd, error } = await supabase
-          .from('supplier_products' as any)
+          .from('supplier_products')
           .select('*, suppliers(id, name, domain)')
           .eq('id', fromSupplierId)
           .maybeSingle()
@@ -142,11 +140,11 @@ function NewProductForm() {
 
           // 1. Name & Slug
           const prodName = supProd.title || ''
-          const prodSlug = prodName.toLowerCase().replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+          const prodSlug = slugifyTr(prodName)
 
           // 2. Base Price
-          const pVal = Number(supProd.price || 0)
-          const formattedPrice = pVal > 0 ? pVal.toLocaleString('tr-TR') : ''
+          const pVal = parseTurkishPrice(supProd.price) || 0
+          const formattedPrice = pVal > 0 ? formatTurkishPrice(pVal) : ''
 
           // 3. Stock Status
           const isOut = supProd.stock_status === 'stokta_yok'
@@ -251,71 +249,82 @@ function NewProductForm() {
   }
 
   const regenerateSKU = () => {
-    const newSku = generateUniqueSKU();
+    const newSku = generateMainSku();
     setMainSku(newSku);
-    setVariants(variants.map((v, idx) => ({ ...v, sku: `${newSku}-${idx + 1}` })));
+    setVariants(prev => prev.map((v, idx) => ({ ...v, sku: `${newSku}-${idx + 1}` })));
   }
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value
-    setProductData({
-      ...productData,
+    setProductData(prev => ({
+      ...prev,
       name,
-      slug: name.toLowerCase().replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
-    })
+      slug: slugTouched ? prev.slug : slugifyTr(name)
+    }))
   }
 
-  const formatTurkishPrice = (raw: string): string => {
-    const digits = raw.replace(/\D/g, '');
-    if (!digits) return '';
-    return Number(digits).toLocaleString('tr-TR');
-  };
-
-  const parsePriceNumber = (formattedStr: string): number => {
-    const digits = formattedStr.replace(/\D/g, '');
-    return digits ? Number(digits) : 0;
-  };
-
   const handleBasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    const formatted = formatTurkishPrice(val);
-    setDisplayBasePrice(formatted);
-    setProductData(prev => ({ ...prev, base_price: parsePriceNumber(formatted) }));
+    const display = sanitizePriceInput(e.target.value);
+    const base = parseTurkishPrice(display) ?? 0;
+    setDisplayBasePrice(display);
+    setProductData(prev => ({ ...prev, base_price: base }));
+    setPriceError(null);
   };
 
   const handleSalePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    const formatted = formatTurkishPrice(val);
-    setDisplaySalePrice(formatted);
-    setProductData(prev => ({ ...prev, sale_price: parsePriceNumber(formatted) }));
+    const display = sanitizePriceInput(e.target.value);
+    const sale = parseTurkishPrice(display) ?? 0;
+    setDisplaySalePrice(display);
+    setProductData(prev => ({ ...prev, sale_price: sale }));
+    setPriceError(null);
+  };
+
+  // Normalise the typed value to "1.299,90" when the field loses focus
+  const handlePriceBlur = () => {
+    setDisplayBasePrice(productData.base_price ? formatTurkishPrice(productData.base_price) : '');
+    setDisplaySalePrice(productData.sale_price ? formatTurkishPrice(productData.sale_price) : '');
+    setPriceError(validatePrices(productData.base_price || null, productData.sale_price || null));
   };
 
   const handleVariantChange = (index: number, field: string, value: any) => {
-    const newVariants = [...variants]
-    newVariants[index][field] = value
-    setVariants(newVariants)
+    setVariants(prev => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)))
   }
 
   const addVariant = () => {
-    const nextIdx = variants.length + 1;
-    setVariants([...variants, { 
-      color_name: 'Siyah', 
-      color_hex: '#1A1A1A', 
-      size: isSizeEnabled ? 'M' : 'STD', 
-      sku: `${mainSku}-${nextIdx}`, 
-      stock_quantity: 10, 
-      price_override: null 
+    setVariants(prev => [...prev, {
+      color_name: 'Siyah',
+      color_hex: '#1A1A1A',
+      size: isSizeEnabled ? 'M' : 'STD',
+      sku: nextVariantSku(mainSku, prev),
+      stock_quantity: 10,
+      price_override: null
     }])
   }
 
   const removeVariant = (index: number) => {
     if (variants.length > 1) {
-      setVariants(variants.filter((_, i) => i !== index))
+      setVariants(prev => prev.filter((_, i) => i !== index))
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const basePrice = Number(productData.base_price) || 0
+    const salePrice = Number(productData.sale_price) || 0
+    const priceValidation = validatePrices(basePrice, salePrice || null)
+    if (priceValidation) {
+      setPriceError(priceValidation)
+      setModalConfig({ isOpen: true, type: 'error', title: 'Fiyat Hatası', message: priceValidation })
+      return
+    }
+
+    const skus = variants.map(v => (v.sku || '').trim()).filter(Boolean)
+    if (new Set(skus).size !== skus.length) {
+      setModalConfig({ isOpen: true, type: 'error', title: 'SKU Hatası', message: 'Aynı SKU koduna sahip birden fazla varyant var. Lütfen "Yeni SKU Üret" butonunu kullanın.' })
+      return
+    }
+
     setLoading(true)
     try {
       const cat = productData.selected_category || 'Elbise';
@@ -325,24 +334,35 @@ function NewProductForm() {
       if (parentCat && parentCat !== cat) {
         tagsArray.push(parentCat);
       }
+      // "Tükendi" is a storefront flag only: per-variant stock values are saved
+      // exactly as entered, so unticking it later restores the real stock.
       if (productData.is_out_of_stock) {
         tagsArray.push('Tükendi');
       }
 
       // Match category_id from DB categories
-      const matchedCat = dbCategories.find(c => c.name === cat || c.slug === cat.toLowerCase());
+      const matchedCat = dbCategories.find(c => c.name === cat || c.slug === slugifyTr(cat));
       const categoryId = matchedCat ? matchedCat.id : null;
+
+      // Unique, Turkish-safe slug (append -2, -3 … when taken)
+      const baseSlug = slugifyTr(productData.slug) || slugifyTr(productData.name) || `urun-${Date.now()}`
+      const { data: takenRows, error: slugErr } = await supabase
+        .from('products')
+        .select('slug')
+        .like('slug', `${baseSlug}%`)
+      if (slugErr) throw slugErr
+      const finalSlug = pickUniqueSlug(baseSlug, (takenRows || []).map((r) => r.slug))
 
       // 1. Create product
       const { data: product, error: productError } = await supabase
-        .from('products' as any)
+        .from('products')
         .insert([{
           name: productData.name,
-          slug: productData.slug || productData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          slug: finalSlug,
           short_description: productData.description || '',
           description: productData.description || '',
-          base_price: Number(productData.base_price) || 0,
-          sale_price: productData.sale_price ? Number(productData.sale_price) : null,
+          base_price: basePrice,
+          sale_price: salePrice > 0 ? salePrice : null,
           fabric_info: productData.fabric_info || '',
           care_instructions: '',
           tags: tagsArray,
@@ -350,13 +370,22 @@ function NewProductForm() {
           is_featured: productData.is_featured,
           is_new: productData.is_new,
           is_active: productData.is_active,
-          seo_title: productData.seo_title || productData.name,
-          seo_description: productData.seo_description || productData.description
+          seo_title: productData.name,
+          seo_description: (productData.description || '').slice(0, 160)
         }])
         .select()
         .single()
 
       if (productError) throw productError
+
+      // Images and variants must both succeed; otherwise roll back the product
+      // so the admin never ends up with a half-created listing.
+      const rollback = async (reason: string, err: { message?: string } | null) => {
+        await supabase.from('product_images').delete().eq('product_id', product.id)
+        await supabase.from('product_variants').delete().eq('product_id', product.id)
+        await supabase.from('products').delete().eq('id', product.id)
+        throw new Error(`${reason}: ${err?.message || err}. Ürün kaydedilmedi, lütfen tekrar deneyin.`)
+      }
 
       // 2. Create images / videos
       if (images.length > 0) {
@@ -366,7 +395,8 @@ function NewProductForm() {
           sort_order: idx,
           is_primary: idx === 0
         }))
-        await supabase.from('product_images' as any).insert(imageRecords)
+        const { error: imgErr } = await supabase.from('product_images').insert(imageRecords)
+        if (imgErr) await rollback('Görseller kaydedilemedi', imgErr)
       }
 
       // 3. Create variants
@@ -377,27 +407,29 @@ function NewProductForm() {
           color_hex: v.color_hex,
           size: isSizeEnabled ? v.size : 'STD',
           sku: v.sku || `${mainSku}-${idx + 1}`,
-          stock_quantity: productData.is_out_of_stock ? 0 : Number(v.stock_quantity),
+          stock_quantity: Math.max(0, Number(v.stock_quantity) || 0),
           price_override: v.price_override ? Number(v.price_override) : null
         }))
-        await supabase.from('product_variants' as any).insert(variantRecords)
+        const { error: varErr } = await supabase.from('product_variants').insert(variantRecords)
+        if (varErr) await rollback('Varyantlar kaydedilemedi', varErr)
       }
 
       // 4. Save Secret Supplier Link & Supplier Info (Admin Only)
+      let supplierWarning = ''
       if (supplierProductUrl.trim() || selectedSupplierId) {
-        try {
-          await supabase.from('supplier_products' as any).insert({
-            admin_product_id: product.id,
-            supplier_id: selectedSupplierId || null,
-            title: productData.name,
-            product_url: supplierProductUrl.trim() || 'https://toptanci.com',
-            sku: mainSku,
-            price: Number(productData.base_price) || 0,
-            stock_status: productData.is_out_of_stock ? 'stokta_yok' : 'stokta_var',
-            fabric: productData.fabric_info || 'Belirtilmemiş'
-          })
-        } catch (supErr) {
+        const { error: supErr } = await supabase.from('supplier_products').insert({
+          admin_product_id: product.id,
+          supplier_id: selectedSupplierId || null,
+          title: productData.name,
+          product_url: supplierProductUrl.trim() || 'https://toptanci.com',
+          sku: mainSku,
+          price: basePrice,
+          stock_status: productData.is_out_of_stock ? 'stokta_yok' : 'stokta_var',
+          fabric: productData.fabric_info || 'Belirtilmemiş'
+        })
+        if (supErr) {
           console.error("Supplier product link save error:", supErr)
+          supplierWarning = ` Ancak gizli toptancı bağlantısı kaydedilemedi: ${supErr.message}`
         }
       }
 
@@ -405,7 +437,7 @@ function NewProductForm() {
         isOpen: true,
         type: 'success',
         title: 'Ürün Başarıyla Yayınlandı',
-        message: 'Ürün, benzersiz SKU kodları ve gizli toptancı bağlantısı başarıyla oluşturuldu.'
+        message: `Ürün "/urunler/${finalSlug}" adresiyle oluşturuldu.${supplierWarning}`
       })
 
     } catch (error: any) {
@@ -480,7 +512,7 @@ function NewProductForm() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Slug (URL Adresi) *</label>
-                  <input required type="text" value={productData.slug} onChange={(e) => setProductData({...productData, slug: e.target.value})} className="w-full p-2.5 border rounded-xs text-sm bg-gray-50 font-mono" />
+                  <input required type="text" value={productData.slug} onChange={(e) => { setSlugTouched(true); setProductData({...productData, slug: e.target.value}) }} onBlur={() => setProductData(prev => ({ ...prev, slug: slugifyTr(prev.slug) }))} className="w-full p-2.5 border rounded-xs text-sm bg-gray-50 font-mono" />
                 </div>
               </div>
               
@@ -546,9 +578,9 @@ function NewProductForm() {
                 bucket="products" 
                 folder="urunler"
                 existingImages={images}
-                onUploadSuccess={(urls) => setImages([...images, ...urls])}
+                onUploadSuccess={(urls) => setImages(prev => [...prev, ...urls.filter(u => !prev.includes(u))])}
                 onReorder={(newImages) => setImages(newImages)}
-                onRemoveImage={(url) => setImages(images.filter(img => img !== url))}
+                onRemoveImage={(url) => setImages(prev => prev.filter(img => img !== url))}
               />
             </div>
 
@@ -714,7 +746,9 @@ function NewProductForm() {
                     required 
                     type="text" 
                     value={displayBasePrice} 
-                    onChange={handleBasePriceChange} 
+                    onChange={handleBasePriceChange}
+                    onBlur={handlePriceBlur}
+                    inputMode="decimal"
                     className="w-full p-2.5 pr-8 border border-gray-300 rounded-xs text-sm font-bold text-[#1A1A1A]" 
                     placeholder="2.000" 
                   />
@@ -728,13 +762,31 @@ function NewProductForm() {
                   <input 
                     type="text" 
                     value={displaySalePrice} 
-                    onChange={handleSalePriceChange} 
+                    onChange={handleSalePriceChange}
+                    onBlur={handlePriceBlur}
+                    inputMode="decimal"
                     className="w-full p-2.5 pr-8 border border-gray-300 rounded-xs text-sm font-bold text-emerald-700" 
                     placeholder="Opsiyonel (Örn: 1.750)" 
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 font-bold text-xs">₺</span>
                 </div>
+                <p className="text-[10px] text-gray-400 mt-1">Kuruş için virgül kullanın (ör. 1.299,90)</p>
               </div>
+
+              {priceError && (
+                <p role="alert" className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xs p-2">{priceError}</p>
+              )}
+
+              <PriceResearchButton
+                productName={productData?.name || ''}
+                fabric={productData?.fabric_info || ''}
+                costPrice={Number(importedSupplierInfo?.price) || undefined}
+                onApplyPrice={(price) => {
+                  setProductData(prev => ({ ...prev, base_price: price }))
+                  setDisplayBasePrice(formatTurkishPrice(price))
+                  setPriceError(validatePrices(price, productData?.sale_price || null))
+                }}
+              />
             </div>
 
             {/* Durum & Etiketler */}
@@ -763,6 +815,11 @@ function NewProductForm() {
                 />
                 <span className="font-bold">Ürün Tükendi (Stokta Yok Rozeti)</span>
               </label>
+              {productData.is_out_of_stock && (
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  Ürün mağazada &quot;Tükendi&quot; olarak gösterilir ve sepete eklenemez. Varyant stok miktarları olduğu gibi saklanır; işareti kaldırdığınızda bu stoklar tekrar geçerli olur.
+                </p>
+              )}
             </div>
           </div>
         </div>

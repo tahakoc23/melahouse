@@ -39,20 +39,23 @@ export default function ProductGrid({ products, totalCount, currentPage }: Produ
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', newPage.toString());
     router.push(`?${params.toString()}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="flex flex-col w-full">
       <div className="flex justify-between items-center mb-6">
         <span className="text-sm text-gray-500">{totalCount} ürün listeleniyor</span>
-        <select 
-          onChange={handleSortChange} 
-          defaultValue={searchParams.get('sort') || 'en-yeni'}
+        <select
+          aria-label="Sıralama"
+          onChange={handleSortChange}
+          value={searchParams.get('sort') || 'en-yeni'}
           className="border-gray-200 border text-sm py-2 px-3 focus:ring-[#C5A572] focus:border-[#C5A572] outline-none"
         >
           <option value="en-yeni">En Yeni</option>
           <option value="fiyat-artan">Fiyat: Düşükten Yükseğe</option>
           <option value="fiyat-azalan">Fiyat: Yüksekten Düşüğe</option>
+          <option value="en-cok-satan">En Çok Satanlar</option>
         </select>
       </div>
 
@@ -80,6 +83,9 @@ export default function ProductGrid({ products, totalCount, currentPage }: Produ
           {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
             <button
               key={page}
+              type="button"
+              aria-label={`Sayfa ${page}`}
+              aria-current={page === currentPage ? 'page' : undefined}
               onClick={() => handlePageChange(page)}
               className={`w-10 h-10 flex items-center justify-center border text-sm transition-colors ${
                 page === currentPage 

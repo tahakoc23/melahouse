@@ -1,12 +1,27 @@
 // @ts-nocheck
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { scrapeSupplierProduct } from "@/lib/scraper/supplierScraper";
+import { assertSafePublicUrl } from "@/lib/scraper/safeFetch";
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+async function validateScrapeUrl(url: unknown): Promise<string | null> {
+  try {
+    const safe = await assertSafePublicUrl(String(url));
+    return safe.toString();
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
+
   try {
     const adminClient = createAdminClient();
     const body = await request.json();
@@ -19,7 +34,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Ürün linki (URL) zorunludur." }, { status: 400 });
       }
 
-      const scrapedData = await scrapeSupplierProduct(product_url);
+      const safeUrl = await validateScrapeUrl(product_url);
+      if (!safeUrl) {
+        return NextResponse.json({ error: "Geçersiz veya izin verilmeyen ürün linki." }, { status: 400 });
+      }
+
+      const scrapedData = await scrapeSupplierProduct(safeUrl);
       return NextResponse.json({ data: scrapedData });
     }
 
@@ -44,6 +64,11 @@ export async function POST(request: Request) {
 
       if (!title || !product_url) {
         return NextResponse.json({ error: "Ürün adı ve linki zorunludur." }, { status: 400 });
+      }
+
+      // Saved URLs are scraped later by refresh_all, so validate them on save too
+      if (!(await validateScrapeUrl(product_url))) {
+        return NextResponse.json({ error: "Geçersiz veya izin verilmeyen ürün linki." }, { status: 400 });
       }
 
       // Automatically create or assign supplier by name if supplier_id not set
@@ -157,7 +182,11 @@ export async function POST(request: Request) {
 
       for (const p of products) {
         try {
-          const fresh = await scrapeSupplierProduct(p.product_url);
+          const safeUrl = await validateScrapeUrl(p.product_url);
+          if (!safeUrl) {
+            throw new Error("Geçersiz veya izin verilmeyen ürün linki.");
+          }
+          const fresh = await scrapeSupplierProduct(safeUrl);
 
           const oldPrice = Number(p.price || 0);
           const newPrice = Number(fresh.price || 0);

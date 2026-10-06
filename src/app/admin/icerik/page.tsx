@@ -60,9 +60,9 @@ export default function AdminContentPage() {
             id: s.id,
             title: s.title || '',
             subtitle: s.subtitle || '',
-            button_text: s.button_text || 'KEŞFET',
-            button_link: s.button_link || '/urunler',
-            media_url: s.image_url || ''
+            button_text: s.link_text || 'KEŞFET',
+            button_link: s.link_url || '/urunler',
+            media_url: s.media_url || ''
           })))
         }
 
@@ -70,10 +70,10 @@ export default function AdminContentPage() {
         if (lookbookItem) {
           setLookbook({
             title: lookbookItem.title || lookbook.title,
-            description: lookbookItem.description || lookbook.description,
-            button_text: lookbookItem.button_text || lookbook.button_text,
-            button_link: lookbookItem.button_link || lookbook.button_link,
-            media_url: lookbookItem.image_url || lookbook.media_url
+            description: lookbookItem.content || lookbook.description,
+            button_text: lookbookItem.link_text || lookbook.button_text,
+            button_link: lookbookItem.link_url || lookbook.button_link,
+            media_url: lookbookItem.media_url || lookbook.media_url
           })
         }
       }
@@ -85,18 +85,20 @@ export default function AdminContentPage() {
   const handleSaveSlider = async () => {
     setLoading(true)
     try {
-      for (const slide of slides) {
-        await supabase.from('site_content' as any).upsert({
+      for (const [idx, slide] of slides.entries()) {
+        const { error } = await supabase.from('site_content' as any).upsert({
           id: slide.id.startsWith('slide-') ? undefined : slide.id,
           content_key: `hero_slide_${slide.id}`,
           content_type: 'slider',
           title: slide.title,
           subtitle: slide.subtitle,
-          button_text: slide.button_text,
-          button_link: slide.button_link,
-          image_url: slide.media_url,
+          link_text: slide.button_text,
+          link_url: slide.button_link,
+          media_url: slide.media_url,
+          sort_order: idx,
           is_active: true
         })
+        if (error) throw error
       }
       setModalConfig({
         isOpen: true,
@@ -119,16 +121,17 @@ export default function AdminContentPage() {
   const handleSaveLookbook = async () => {
     setLoading(true)
     try {
-      await supabase.from('site_content' as any).upsert({
+      const { error } = await supabase.from('site_content' as any).upsert({
         content_key: 'lookbook_section',
-        content_type: 'lookbook',
+        content_type: 'banner',
         title: lookbook.title,
-        description: lookbook.description,
-        button_text: lookbook.button_text,
-        button_link: lookbook.button_link,
-        image_url: lookbook.media_url,
+        content: lookbook.description,
+        link_text: lookbook.button_text,
+        link_url: lookbook.button_link,
+        media_url: lookbook.media_url,
         is_active: true
-      })
+      }, { onConflict: 'content_key' })
+      if (error) throw error
       setModalConfig({
         isOpen: true,
         type: 'success',

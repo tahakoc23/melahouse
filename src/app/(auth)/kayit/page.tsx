@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import RegisterForm from "./RegisterForm";
 
 export const metadata: Metadata = {
-  title: "Kayıt Ol | MELA HOUSE",
+  title: "Kayıt Ol",
   description: "MELA HOUSE'ya kayıt olun.",
 };
 

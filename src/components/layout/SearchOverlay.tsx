@@ -20,14 +20,41 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+interface SearchResult {
+  id: string;
+  name: string;
+  slug: string;
+  base_price: number | null;
+  sale_price: number | null;
+  product_images: { image_url: string | null; is_primary: boolean | null; sort_order: number | null }[] | null;
+}
+
+// Skip videos / reels: only real images can be shown in the result thumbnail
+const VIDEO_URL_RE = /(\.(mp4|webm|mov|m4v|ogv|avi)([?#].*)?$)|instagram\.com|youtube\.com|youtu\.be/i;
+
+function getPrimaryImage(p: SearchResult): string | null {
+  const imgs = (p.product_images || []).filter(
+    (i) => i.image_url && !i.image_url.startsWith('blob:') && !VIDEO_URL_RE.test(i.image_url)
+  );
+  if (imgs.length === 0) return null;
+  const sorted = [...imgs].sort(
+    (a, b) => Number(!!b.is_primary) - Number(!!a.is_primary) || (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  );
+  return sorted[0].image_url;
+}
+
+function formatTry(n: number) {
+  return `${n.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺`;
+}
+
 export default function SearchOverlay() {
   const { isSearchOpen, toggleSearch } = useUIStore();
-  const closeSearch = () => toggleSearch(false);
+  const closeSearch = useCallback(() => toggleSearch(false), [toggleSearch]);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const debouncedQuery = useDebounce(query, 300);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -46,25 +73,32 @@ export default function SearchOverlay() {
   }, [isSearchOpen, closeSearch]);
 
   useEffect(() => {
+    let cancelled = false;
     const searchProducts = async () => {
-      if (debouncedQuery.length < 2) {
+      const term = debouncedQuery.trim();
+      if (term.length < 2) {
         setResults([]);
         return;
       }
       setIsSearching(true);
+      // Escape LIKE wildcards and PostgREST-significant characters typed by the user
+      const safeTerm = term.replace(/[%_\\,()]/g, ' ');
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, slug, price, images')
-        .ilike('name', `%${debouncedQuery}%`)
+        .select('id, name, slug, base_price, sale_price, product_images(image_url, is_primary, sort_order)')
+        .eq('is_active', true)
+        .ilike('name', `%${safeTerm}%`)
         .limit(6);
 
-      if (!error && data) {
-        setResults(data);
-      }
+      if (cancelled) return;
+      setResults(!error && data ? (data as SearchResult[]) : []);
       setIsSearching(false);
     };
 
     searchProducts();
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery, supabase]);
 
   return (
@@ -121,40 +155,52 @@ export default function SearchOverlay() {
                     Sonuçlar ({results.length})
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-                    {results.map((product) => (
-                      <Link 
-                        key={product.id} 
-                        href={`/urun/${product.slug}`}
-                        onClick={closeSearch}
-                        className="group"
-                      >
-                        <div className="relative aspect-[3/4] bg-gray-100 mb-4 overflow-hidden">
-                          {product.images && product.images[0] ? (
-                            <Image
-                              src={product.images[0]}
-                              alt={product.name}
-                              fill
-                              className="object-cover group-hover:scale-105 transition-transform duration-500"
-                            />
+                    {results.map((product) => {
+                      const image = getPrimaryImage(product);
+                      const base = Number(product.base_price) || 0;
+                      const sale = Number(product.sale_price) || 0;
+                      const hasDiscount = sale > 0 && sale < base;
+                      return (
+                        <Link
+                          key={product.id}
+                          href={`/urunler/${product.slug}`}
+                          onClick={closeSearch}
+                          className="group"
+                        >
+                          <div className="relative aspect-[3/4] bg-gray-100 mb-4 overflow-hidden">
+                            {image ? (
+                              <Image
+                                src={image}
+                                alt={product.name}
+                                fill
+                                sizes="(max-width: 768px) 50vw, 16vw"
+                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                <ShoppingBag className="w-8 h-8" />
+                              </div>
+                            )}
+                          </div>
+                          <h4 className="font-medium text-[#1A1A1A] text-sm mb-1 line-clamp-2 group-hover:text-[#C5A572] transition-colors">
+                            {product.name}
+                          </h4>
+                          {hasDiscount ? (
+                            <p className="text-sm">
+                              <span className="text-[#1A1A1A] font-semibold">{formatTry(sale)}</span>{' '}
+                              <span className="text-gray-400 line-through text-xs">{formatTry(base)}</span>
+                            </p>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-300">
-                              <ShoppingBag className="w-8 h-8" />
-                            </div>
+                            <p className="text-[#1A1A1A] font-semibold text-sm">{formatTry(base)}</p>
                           )}
-                        </div>
-                        <h4 className="font-medium text-[#1A1A1A] text-sm mb-1 line-clamp-2 group-hover:text-[#C5A572] transition-colors">
-                          {product.name}
-                        </h4>
-                        <p className="text-[#1A1A1A] font-semibold text-sm">
-                          {product.price.toLocaleString('tr-TR')} ₺
-                        </p>
-                      </Link>
-                    ))}
+                        </Link>
+                      );
+                    })}
                   </div>
                 </div>
               ) : query.length >= 2 ? (
                 <div className="text-center text-gray-500 py-12">
-                  <p className="text-xl font-playfair mb-2">"{query}" için sonuç bulunamadı.</p>
+                  <p className="text-xl font-playfair mb-2">&ldquo;{query}&rdquo; için sonuç bulunamadı.</p>
                   <p>Lütfen farklı bir anahtar kelime ile tekrar deneyin.</p>
                 </div>
               ) : (

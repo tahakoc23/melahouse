@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Kullanım Koşulları | MELA HOUSE',
+  title: 'Kullanım Koşulları',
   description: 'MELA HOUSE web sitesi kullanım şartları, fikri mülkiyet hakları ve alışveriş kuralları.',
 }
 

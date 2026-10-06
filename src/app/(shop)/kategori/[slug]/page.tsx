@@ -1,141 +1,139 @@
-// @ts-nocheck
-import { createAdminClient } from '@/lib/supabase/admin';
+import type { Metadata } from 'next';
+import { cache } from 'react';
+import { notFound } from 'next/navigation';
+import { createPublicClient } from '@/lib/supabase/public';
+import type { Database } from '@/types/database';
 import ProductGrid from '@/components/product/ProductGrid';
 import FilterSidebar from '@/components/product/FilterSidebar';
+import BreadcrumbSchema from '@/components/seo/BreadcrumbSchema';
+import {
+  LISTING_SELECT,
+  buildListing,
+  findStaticCategory,
+  formatListingProduct,
+  normalizeSlug,
+  productInCategories,
+} from '@/components/product/catalog';
 
-const normalizeSlug = (str: string) => {
-  if (!str) return '';
-  return str
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/ğ/g, 'g')
-    .replace(/ü/g, 'u')
-    .replace(/ş/g, 's')
-    .replace(/ı/g, 'i')
-    .replace(/ö/g, 'o')
-    .replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
+const SITE_URL = 'https://www.melahouse.net';
+
+const safeDecode = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 };
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const resolvedParams = await params;
-  const name = resolvedParams.slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+/**
+ * Resolves a category slug to its display name and the slugs it covers.
+ * DB categories win (proper Turkish name, e.g. "İç Giyim"); the storefront
+ * taxonomy is the fallback because product tags are written from it.
+ * Returns null for unknown or deactivated categories.
+ */
+const resolveCategory = cache(async (rawSlug: string) => {
+  const slug = normalizeSlug(safeDecode(rawSlug));
+  if (!slug) return null;
+
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from('categories')
+    .select('id, name, slug, description, is_active, seo_title, seo_description')
+    .eq('slug', slug)
+    .maybeSingle();
+  const dbCat = data as Pick<
+    Database['public']['Tables']['categories']['Row'],
+    'id' | 'name' | 'slug' | 'description' | 'is_active' | 'seo_title' | 'seo_description'
+  > | null;
+
+  if (dbCat && dbCat.is_active === false) return null;
+
+  const staticCat = findStaticCategory(slug);
+  if (!dbCat && !staticCat) return null;
+
+  const slugs = new Set<string>(staticCat?.slugs || [slug]);
+  if (dbCat) {
+    const { data: children } = await supabase
+      .from('categories')
+      .select('slug')
+      .eq('parent_id', dbCat.id)
+      .or('is_active.is.null,is_active.eq.true');
+    ((children || []) as { slug: string }[]).forEach((c) => slugs.add(normalizeSlug(c.slug)));
+  }
+
   return {
-    title: `${name} | MELA HOUSE`,
-    description: `${name} özel tasarım koleksiyonumuzu keşfedin.`,
+    slug,
+    name: dbCat?.name || staticCat!.name,
+    description: dbCat?.description || null,
+    seoTitle: dbCat?.seo_title || null,
+    seoDescription: dbCat?.seo_description || null,
+    slugs: Array.from(slugs),
+  };
+});
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const category = await resolveCategory(slug);
+  if (!category) return { title: 'Kategori Bulunamadı' };
+
+  // Root layout template appends "| MELA HOUSE"
+  const title = (category.seoTitle || category.name).replace(/\s*[|–-]\s*MELA HOUSE\s*$/i, '');
+  return {
+    title,
+    description: category.seoDescription || category.description || `MELA HOUSE ${category.name} koleksiyonunu keşfedin.`,
+    alternates: { canonical: `/kategori/${category.slug}` },
   };
 }
 
-export default async function CategoryPage({ 
+export default async function CategoryPage({
   params,
-  searchParams
-}: { 
+  searchParams,
+}: {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const resolvedParams = await params;
+  const { slug } = await params;
   const resolvedSearchParams = await searchParams;
-  const supabase = createAdminClient();
 
-  const currentSlug = resolvedParams.slug;
-  const normCurrentSlug = normalizeSlug(currentSlug);
+  const category = await resolveCategory(slug);
+  if (!category) {
+    notFound();
+  }
 
-  // Fetch all active products from Supabase via admin client
+  const supabase = createPublicClient();
   const { data: dbProducts } = await supabase
     .from('products')
-    .select(`
-      *,
-      categories ( id, name, slug ),
-      product_images ( image_url, is_primary, sort_order ),
-      product_variants ( color_name, color_hex, size )
-    `)
+    .select(LISTING_SELECT)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
-  const formattedDbProducts = dbProducts?.map(p => {
-    const validImages = p.product_images?.filter(i => i.image_url && !i.image_url.startsWith('blob:')) || [];
-    const primaryImg = validImages[0]?.image_url || '';
-    const catSlug = p.categories?.slug || (Array.isArray(p.tags) ? normalizeSlug(p.tags[0]) : normalizeSlug(p.tags || ''));
-    
-    return {
-      ...p,
-      primary_image: primaryImg,
-      category_slug: catSlug,
-      tags: Array.isArray(p.tags) ? p.tags : (p.tags ? [p.tags] : ['Elbise'])
-    };
-  }) || [];
+  // Filter options are built from this category's products only
+  const scope = (dbProducts || [])
+    .map(formatListingProduct)
+    .filter((p) => productInCategories(p, category.slugs));
 
-  // Filter products for this specific category slug
-  let list = formattedDbProducts.filter(p => {
-    if (p.categories?.slug && normalizeSlug(p.categories.slug) === normCurrentSlug) return true;
-    if (p.category_slug && normalizeSlug(p.category_slug) === normCurrentSlug) return true;
-    if (p.parent_category && normalizeSlug(p.parent_category) === normCurrentSlug) return true;
-    
-    if (Array.isArray(p.tags)) {
-      return p.tags.some((t: string) => {
-        const normTag = normalizeSlug(t);
-        if (!normTag) return false;
-        return (
-          normTag === normCurrentSlug || 
-          normCurrentSlug.includes(normTag) || 
-          normTag.includes(normCurrentSlug)
-        );
-      });
-    }
-    
-    return false;
-  });
-
-  // Extract available colors & sizes
-  const colorMap = new Map<string, string>();
-  formattedDbProducts.forEach(p => {
-    p.product_variants?.forEach((v: any) => {
-      if (v.color_name && v.color_hex && !colorMap.has(v.color_name)) {
-        colorMap.set(v.color_name, v.color_hex);
-      }
-    });
-  });
-
-  if (colorMap.size === 0) {
-    colorMap.set('Siyah', '#1A1A1A');
-    colorMap.set('Şampanya', '#E6D5C3');
-    colorMap.set('Kırmızı', '#D62828');
-    colorMap.set('Altın', '#C5A572');
-  }
-
-  const availableColors = Array.from(colorMap.entries()).map(([name, hex]) => ({ name, hex }));
-  const availableSizes = Array.from(new Set(formattedDbProducts.flatMap(p => (p.product_variants?.map((v: any) => v.size) || p.sizes || [])).filter(Boolean)));
-
-  // Filter Color
-  if (resolvedSearchParams.color) {
-    const selectedColors = Array.isArray(resolvedSearchParams.color) ? resolvedSearchParams.color : [resolvedSearchParams.color];
-    list = list.filter(p => {
-      const pColors = p.product_variants?.map((v: any) => v.color_name) || [p.color_name];
-      return pColors.some((c: string) => selectedColors.includes(c));
-    });
-  }
-
-  // Filter Size
-  if (resolvedSearchParams.size) {
-    const selectedSizes = Array.isArray(resolvedSearchParams.size) ? resolvedSearchParams.size : [resolvedSearchParams.size];
-    list = list.filter(p => {
-      const pSizes = p.product_variants?.map((v: any) => v.size) || p.sizes || [];
-      return pSizes.some((s: string) => selectedSizes.includes(s));
-    });
-  }
+  const { products, totalCount, currentPage, availableColors, availableSizes } = buildListing(
+    scope,
+    resolvedSearchParams
+  );
 
   return (
     <div className="bg-[#FAFAF8] min-h-screen pt-32 md:pt-48">
+      <BreadcrumbSchema
+        items={[
+          { name: 'Ana Sayfa', url: SITE_URL },
+          { name: category.name, url: `${SITE_URL}/kategori/${category.slug}` },
+        ]}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        <h1 className="font-playfair text-3xl md:text-4xl text-[#1A1A1A] mb-8">{category.name}</h1>
         <div className="flex flex-col md:flex-row gap-8">
           <aside className="w-full md:w-64 flex-shrink-0">
             <FilterSidebar availableColors={availableColors} availableSizes={availableSizes} />
           </aside>
-          
+
           <main className="flex-1">
-            <ProductGrid products={list} totalCount={list.length} currentPage={1} />
+            <ProductGrid products={products} totalCount={totalCount} currentPage={currentPage} />
           </main>
         </div>
       </div>

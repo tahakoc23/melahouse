@@ -8,165 +8,110 @@ interface Category {
   id: string
   name: string
   slug: string
-  image_url: string
+  image_url?: string | null
 }
 
 interface CategoryShowcaseProps {
   categories?: Category[]
 }
 
-const FIVE_MAIN_COLLECTIONS = [
+// Ana koleksiyonlar. Admin'de kategoriye görsel eklenirse o görsel kullanılır.
+const COLLECTIONS = [
   {
-    id: 'c-1',
-    name: 'Üst Giyim',
     slug: 'ust-giyim',
-    subtitle: 'Elbise, Gömlek, Crop, Kimono & Dahası',
-    image_url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?q=80&w=1200&auto=format&fit=crop'
+    name: 'Üst Giyim',
+    detail: 'Elbise · Gömlek · Bluz · Kimono',
+    image: 'https://images.unsplash.com/photo-1704775990248-4c1c1a276b4f?q=80&w=1400&auto=format&fit=crop',
+    span: 'md:col-span-7 md:row-span-2',
   },
   {
-    id: 'c-2',
-    name: 'Alt Giyim',
     slug: 'alt-giyim',
-    subtitle: 'Pantolon, Etek, Şort & Tayt',
-    image_url: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=1200&auto=format&fit=crop'
+    name: 'Alt Giyim',
+    detail: 'Pantolon · Etek · Şort',
+    image: 'https://images.unsplash.com/photo-1741605037162-b1f475a4a4d3?q=80&w=1200&auto=format&fit=crop',
+    span: 'md:col-span-5',
   },
   {
-    id: 'c-3',
-    name: 'İç Giyim',
-    slug: 'ic-giyim',
-    subtitle: 'Zarif İpek Dantel & Kombinezon',
-    image_url: 'https://images.unsplash.com/photo-1583846783214-7229a91b20ed?q=80&w=1200&auto=format&fit=crop'
-  },
-  {
-    id: 'c-4',
-    name: 'Dış Giyim',
     slug: 'dis-giyim',
-    subtitle: 'Trençkot, Kaban, Ceket & Mont',
-    image_url: 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1200&auto=format&fit=crop'
+    name: 'Dış Giyim',
+    detail: 'Trençkot · Kaban · Ceket',
+    image: 'https://images.unsplash.com/photo-1723390926441-5840f12432fc?q=80&w=1200&auto=format&fit=crop',
+    span: 'md:col-span-5',
   },
   {
-    id: 'c-5',
-    name: 'Takımlar',
     slug: 'takimlar',
-    subtitle: 'Lüks İkili Kombin & Takımlar',
-    image_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop'
-  }
+    name: 'Takımlar',
+    detail: 'İkili ve üçlü kombinler',
+    image: 'https://images.unsplash.com/photo-1619914777583-ce0b7830d2a6?q=80&w=1200&auto=format&fit=crop',
+    span: 'md:col-span-6',
+  },
+  {
+    slug: 'ic-giyim',
+    name: 'İç Giyim',
+    detail: 'Saten · Dantel · Gecelik',
+    image: 'https://images.unsplash.com/photo-1624819153654-5cfb66a0fc68?q=80&w=1200&auto=format&fit=crop',
+    span: 'md:col-span-6',
+  },
 ]
 
-export default function CategoryShowcase({ categories }: CategoryShowcaseProps) {
-  const displayCats = FIVE_MAIN_COLLECTIONS;
+export default function CategoryShowcase({ categories = [] }: CategoryShowcaseProps) {
+  const bySlug = new Map(categories.map(c => [c.slug, c]))
 
   return (
-    <section className="px-4 md:px-8 max-w-[1600px] mx-auto py-12 font-inter">
-      <div className="flex flex-col items-center mb-14">
-        <motion.h2 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="font-playfair text-4xl md:text-5xl text-[#1A1A1A] mb-4 text-center font-semibold tracking-tight"
-        >
-          Koleksiyonlar
-        </motion.h2>
-        <motion.div 
-          initial={{ scaleX: 0 }}
-          whileInView={{ scaleX: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="h-[1px] w-24 bg-[#C5A572]"
-        />
+    <section className="max-w-[1600px] mx-auto px-5 md:px-10" aria-labelledby="koleksiyonlar-baslik">
+      <div className="flex items-end justify-between gap-6 border-b border-ink/15 pb-5 mb-8 md:mb-10">
+        <div>
+          <p className="eyebrow text-kul mb-3">Koleksiyonlar</p>
+          <h2 id="koleksiyonlar-baslik" className="font-display text-4xl md:text-6xl leading-none">
+            Gardırobun <em className="text-murdum">temeli</em>
+          </h2>
+        </div>
+        <Link href="/urunler" className="eyebrow link-couture hidden sm:inline-block whitespace-nowrap">
+          Tüm ürünler
+        </Link>
       </div>
 
-      {/* 5 Main Collections Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 md:gap-6 min-h-[600px]">
-        {/* Card 1: Üst Giyim (Col 1-3) */}
-        <Link href={`/kategori/${displayCats[0].slug}`} className="md:col-span-3 group relative block overflow-hidden min-h-[340px] md:min-h-[420px] rounded-xs shadow-sm">
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={displayCats[0].image_url}
-              alt={displayCats[0].name}
-              fill
-              className="object-cover transition-transform duration-1000 group-hover:scale-105"
-            />
-          </div>
-          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/45 transition-colors duration-500 z-10" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 text-center px-6">
-            <span className="text-[#C5A572] font-inter text-xs tracking-widest uppercase mb-2">Koleksiyon</span>
-            <h3 className="font-playfair text-3xl md:text-5xl text-white tracking-wide mb-2 font-medium">{displayCats[0].name}</h3>
-            <p className="text-gray-200 text-xs font-light tracking-wider mb-4 hidden md:block">{displayCats[0].subtitle}</p>
-            <span className="text-white border-b border-[#C5A572] font-inter text-xs tracking-widest uppercase pb-1 group-hover:text-[#C5A572] transition-colors">Keşfet &rarr;</span>
-          </div>
-        </Link>
-
-        {/* Card 2: Alt Giyim (Col 4-6) */}
-        <Link href={`/kategori/${displayCats[1].slug}`} className="md:col-span-3 group relative block overflow-hidden min-h-[340px] md:min-h-[420px] rounded-xs shadow-sm">
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={displayCats[1].image_url}
-              alt={displayCats[1].name}
-              fill
-              className="object-cover transition-transform duration-1000 group-hover:scale-105"
-            />
-          </div>
-          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/45 transition-colors duration-500 z-10" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 text-center px-6">
-            <span className="text-[#C5A572] font-inter text-xs tracking-widest uppercase mb-2">Koleksiyon</span>
-            <h3 className="font-playfair text-3xl md:text-5xl text-white tracking-wide mb-2 font-medium">{displayCats[1].name}</h3>
-            <p className="text-gray-200 text-xs font-light tracking-wider mb-4 hidden md:block">{displayCats[1].subtitle}</p>
-            <span className="text-white border-b border-[#C5A572] font-inter text-xs tracking-widest uppercase pb-1 group-hover:text-[#C5A572] transition-colors">Keşfet &rarr;</span>
-          </div>
-        </Link>
-
-        {/* Card 3: İç Giyim (Col 1-2) */}
-        <Link href={`/kategori/${displayCats[2].slug}`} className="md:col-span-2 group relative block overflow-hidden min-h-[280px] rounded-xs shadow-sm">
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={displayCats[2].image_url}
-              alt={displayCats[2].name}
-              fill
-              className="object-cover transition-transform duration-1000 group-hover:scale-105"
-            />
-          </div>
-          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/45 transition-colors duration-500 z-10" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 text-center px-4">
-            <h3 className="font-playfair text-2xl md:text-3xl text-white tracking-wide mb-2 font-medium">{displayCats[2].name}</h3>
-            <span className="text-[#C5A572] font-inter text-xs tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity duration-300">Keşfet &rarr;</span>
-          </div>
-        </Link>
-
-        {/* Card 4: Dış Giyim (Col 3-4) */}
-        <Link href={`/kategori/${displayCats[3].slug}`} className="md:col-span-2 group relative block overflow-hidden min-h-[280px] rounded-xs shadow-sm">
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={displayCats[3].image_url}
-              alt={displayCats[3].name}
-              fill
-              className="object-cover transition-transform duration-1000 group-hover:scale-105"
-            />
-          </div>
-          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/45 transition-colors duration-500 z-10" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 text-center px-4">
-            <h3 className="font-playfair text-2xl md:text-3xl text-white tracking-wide mb-2 font-medium">{displayCats[3].name}</h3>
-            <span className="text-[#C5A572] font-inter text-xs tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity duration-300">Keşfet &rarr;</span>
-          </div>
-        </Link>
-
-        {/* Card 5: Takımlar (Col 5-6) */}
-        <Link href={`/kategori/${displayCats[4].slug}`} className="md:col-span-2 group relative block overflow-hidden min-h-[280px] rounded-xs shadow-sm">
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={displayCats[4].image_url}
-              alt={displayCats[4].name}
-              fill
-              className="object-cover transition-transform duration-1000 group-hover:scale-105"
-            />
-          </div>
-          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/45 transition-colors duration-500 z-10" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 text-center px-4">
-            <h3 className="font-playfair text-2xl md:text-3xl text-white tracking-wide mb-2 font-medium">{displayCats[4].name}</h3>
-            <span className="text-[#C5A572] font-inter text-xs tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity duration-300">Keşfet &rarr;</span>
-          </div>
-        </Link>
+      <div className="grid grid-cols-2 md:grid-cols-12 md:auto-rows-[300px] gap-3 md:gap-4">
+        {COLLECTIONS.map((col, i) => {
+          const dbCat = bySlug.get(col.slug)
+          const image = dbCat?.image_url || col.image
+          const name = dbCat?.name || col.name
+          return (
+            <motion.div
+              key={col.slug}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: (i % 3) * 0.08 }}
+              className={`${i === 0 ? 'col-span-2 aspect-[4/5]' : 'col-span-1 aspect-[3/4]'} md:aspect-auto ${col.span}`}
+            >
+              <Link href={`/kategori/${col.slug}`} className="group relative block h-full w-full overflow-hidden bg-tas">
+                <Image
+                  src={image}
+                  alt={name}
+                  fill
+                  sizes={i === 0 ? '(min-width: 768px) 58vw, 100vw' : '(min-width: 768px) 42vw, 50vw'}
+                  className="object-cover transition-transform duration-[1600ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/0 to-ink/0" />
+                <div className="absolute inset-x-0 bottom-0 p-4 md:p-7 text-white flex items-end justify-between gap-4">
+                  <div>
+                    <h3 className={`font-display italic leading-none ${i === 0 ? 'text-4xl md:text-7xl' : 'text-2xl md:text-4xl'}`}>
+                      {name}
+                    </h3>
+                    <p className="hidden md:block eyebrow text-white/75 mt-3">{col.detail}</p>
+                  </div>
+                  <span
+                    aria-hidden
+                    className="hidden md:flex shrink-0 items-center justify-center w-11 h-11 rounded-full border border-white/60 transition-all duration-500 group-hover:bg-white group-hover:text-ink"
+                  >
+                    →
+                  </span>
+                </div>
+              </Link>
+            </motion.div>
+          )
+        })}
       </div>
     </section>
   )

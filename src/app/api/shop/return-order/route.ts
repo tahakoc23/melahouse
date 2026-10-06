@@ -3,19 +3,43 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+// Real order status values (see src/lib/constants.ts ORDER_STATUSES)
+const RETURNABLE_STATUSES = ["teslim_edildi", "kargoya_verildi"];
+const RETURN_REASON_MAX = 200;
+const RETURN_EXPLANATION_MAX = 1000;
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (userError || !user) {
       return NextResponse.json({ error: "Oturum açmanız gerekmektedir." }, { status: 401 });
     }
 
-    const { orderId, reason, explanation } = await req.json();
+    const { orderId, reason: rawReason, explanation: rawExplanation } = await req.json();
 
     if (!orderId) {
       return NextResponse.json({ error: "Sipariş ID gereklidir." }, { status: 400 });
+    }
+
+    const reason = typeof rawReason === "string" ? rawReason.trim() : "";
+    const explanation = typeof rawExplanation === "string" ? rawExplanation.trim() : "";
+
+    if (rawExplanation != null && typeof rawExplanation !== "string") {
+      return NextResponse.json({ error: "Açıklama geçersiz." }, { status: 400 });
+    }
+
+    if (!reason) {
+      return NextResponse.json({ error: "İade nedeni zorunludur." }, { status: 400 });
+    }
+
+    if (reason.length > RETURN_REASON_MAX) {
+      return NextResponse.json({ error: `İade nedeni en fazla ${RETURN_REASON_MAX} karakter olabilir.` }, { status: 400 });
+    }
+
+    if (explanation.length > RETURN_EXPLANATION_MAX) {
+      return NextResponse.json({ error: `Açıklama en fazla ${RETURN_EXPLANATION_MAX} karakter olabilir.` }, { status: 400 });
     }
 
     const adminClient = createAdminClient();
@@ -31,8 +55,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Sipariş bulunamadı." }, { status: 404 });
     }
 
-    if (order.user_id !== session.user.id) {
+    if (order.user_id !== user.id) {
       return NextResponse.json({ error: "Bu işlem için yetkiniz bulunmuyor." }, { status: 403 });
+    }
+
+    if (!RETURNABLE_STATUSES.includes(order.status)) {
+      return NextResponse.json({ error: "Bu sipariş için iade talebi oluşturulamaz. Yalnızca kargoya verilmiş veya teslim edilmiş siparişler iade edilebilir." }, { status: 400 });
     }
 
     const returnNote = `[İADE TALEBİ] Nedeni: ${reason}${explanation ? ` | Açıklama: ${explanation}` : ''}`;
@@ -45,7 +73,8 @@ export async function POST(req: Request) {
         notes: updatedNotes,
         updated_at: new Date().toISOString()
       })
-      .eq("id", orderId);
+      .eq("id", orderId)
+      .in("status", RETURNABLE_STATUSES);
 
     if (updateErr) {
       console.error("Order return update error:", updateErr);

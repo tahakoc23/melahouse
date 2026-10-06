@@ -18,24 +18,27 @@ interface HeroSliderProps {
   slides?: Slide[]
 }
 
+// Admin panelinden (İçerik Yönetimi > Slider) görsel eklenmediğinde gösterilen kapak
 const DEFAULT_SLIDES: Slide[] = [
   {
     id: 'default-hero-1',
-    title: 'Yeni Sezon Koleksiyonu',
-    subtitle: 'ZARAFETİN VE LÜKSÜN SİMGESİ',
-    image_url: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=2000&auto=format&fit=crop',
+    title: 'Yeni sezon, sakin bir zarafetle.',
+    subtitle: 'Sonbahar · Kış 2026',
+    image_url: 'https://images.unsplash.com/photo-1571513800374-df1bbe650e56?q=75&w=1800&auto=format&fit=crop',
     link_url: '/urunler',
-    link_text: 'Koleksiyonu Keşfet'
+    link_text: 'Koleksiyonu keşfet',
   },
   {
     id: 'default-hero-2',
-    title: 'Lüks İç Giyim & İpek',
-    subtitle: 'SAF İPEK DOKUNUŞLARI',
-    image_url: 'https://images.unsplash.com/photo-1583846783214-7229a91b20ed?q=80&w=2000&auto=format&fit=crop',
-    link_url: '/urunler',
-    link_text: 'Ürünleri İncele'
-  }
+    title: 'Ölçülü kesimler, sezonsuz parçalar.',
+    subtitle: 'Takımlar',
+    image_url: 'https://images.unsplash.com/photo-1668952135120-7d997b1b3778?q=75&w=1800&auto=format&fit=crop',
+    link_url: '/kategori/takimlar',
+    link_text: 'Takımları gör',
+  },
 ]
+
+const ease = [0.22, 1, 0.36, 1] as const
 
 export default function HeroSlider({ slides }: HeroSliderProps) {
   const activeSlides = slides && slides.length > 0 ? slides : DEFAULT_SLIDES
@@ -44,92 +47,108 @@ export default function HeroSlider({ slides }: HeroSliderProps) {
 
   useEffect(() => {
     if (activeSlides.length <= 1 || isPaused) return
-
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % activeSlides.length)
-    }, 6000)
-
+      setCurrentIndex(prev => (prev + 1) % activeSlides.length)
+    }, 7000)
     return () => clearInterval(timer)
   }, [activeSlides.length, isPaused])
 
   const currentSlide = activeSlides[currentIndex]
 
   return (
-    <section 
-      className="relative h-[100dvh] w-full overflow-hidden bg-[#1A1A1A]"
+    <section
+      aria-label="Öne çıkan koleksiyon"
+      className="relative h-[100svh] min-h-[620px] w-full overflow-hidden bg-ink text-white"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, scale: 1.05 }}
+          key={currentSlide.id}
+          initial={{ opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
+          transition={{ duration: 1.6, ease }}
           className="absolute inset-0"
         >
           <Image
             src={currentSlide.image_url}
             alt={currentSlide.title}
             fill
-            className="object-cover"
-            priority
+            sizes="100vw"
+            className="object-cover object-[50%_30%]"
+            priority={currentIndex === 0}
           />
-          <div className="absolute inset-0 bg-black/40" />
         </motion.div>
       </AnimatePresence>
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 z-10">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`content-${currentIndex}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="max-w-4xl"
-          >
-            {currentSlide.subtitle && (
-              <h3 className="font-inter text-xs md:text-sm uppercase tracking-[0.3em] text-[#C5A572] mb-6 font-semibold">
-                {currentSlide.subtitle}
-              </h3>
-            )}
-            <h1 className="font-playfair text-5xl md:text-7xl lg:text-8xl text-[#FAFAF8] font-medium mb-10 leading-tight">
-              {currentSlide.title}
-            </h1>
-            {currentSlide.link_url && (
-              <Link 
-                href={currentSlide.link_url}
-                className="inline-block border border-[#C5A572] text-[#FAFAF8] bg-black/30 backdrop-blur-xs px-10 py-4 font-inter text-xs tracking-widest uppercase hover:bg-[#C5A572] hover:text-[#1A1A1A] transition-all duration-300 shadow-lg"
-              >
-                {currentSlide.link_text || 'Keşfet'}
-              </Link>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {/* Okunabilirlik için alttan koyulaşan perde */}
+      <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/20 to-ink/30" />
 
-      {activeSlides.length > 1 && (
-        <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-4 z-20">
-          {activeSlides.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentIndex(idx)}
-              className="group py-4 px-2 cursor-pointer"
-              aria-label={`Go to slide ${idx + 1}`}
+      <div className="relative z-10 h-full max-w-[1600px] mx-auto px-5 md:px-10 flex flex-col justify-end pb-6 md:pb-8">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-4 md:mb-2">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`copy-${currentSlide.id}`}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.8, ease, delay: 0.25 }}
+              className="max-w-md"
             >
-              <div 
-                className={`h-[2px] w-12 transition-all duration-300 ${
-                  idx === currentIndex 
-                    ? 'bg-[#C5A572]' 
-                    : 'bg-white/40 group-hover:bg-white/70'
-                }`}
-              />
-            </button>
-          ))}
+              {currentSlide.subtitle && <p className="eyebrow text-gold-light mb-4">{currentSlide.subtitle}</p>}
+              <h2 className="font-display italic text-3xl md:text-[2.6rem] leading-[1.1] mb-6">{currentSlide.title}</h2>
+              {currentSlide.link_url && (
+                <Link
+                  href={currentSlide.link_url}
+                  className="inline-flex items-center gap-4 bg-white text-ink px-8 py-4 eyebrow hover:bg-gold-light transition-colors duration-500"
+                >
+                  {currentSlide.link_text || 'Keşfet'}
+                  <span aria-hidden className="block h-px w-8 bg-current" />
+                </Link>
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {activeSlides.length > 1 && (
+            <div className="flex items-center gap-4" role="tablist" aria-label="Kapak görselleri">
+              <span className="font-display text-sm tabular-nums">
+                {String(currentIndex + 1).padStart(2, '0')}
+                <span className="text-white/50"> / {String(activeSlides.length).padStart(2, '0')}</span>
+              </span>
+              <div className="flex gap-2">
+                {activeSlides.map((s, idx) => (
+                  <button
+                    key={s.id}
+                    role="tab"
+                    aria-selected={idx === currentIndex}
+                    onClick={() => setCurrentIndex(idx)}
+                    className="py-3 cursor-pointer"
+                    aria-label={`${idx + 1}. görsel`}
+                  >
+                    <span
+                      className={`block h-px transition-all duration-700 ${
+                        idx === currentIndex ? 'w-14 bg-white' : 'w-6 bg-white/40 hover:bg-white/70'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Dergi kapağı manşeti */}
+        <div className="overflow-hidden border-t border-white/25 pt-2">
+          <p
+            aria-hidden
+            className="animate-masthead font-display font-normal leading-[0.82] tracking-[-0.02em] whitespace-nowrap text-center text-[clamp(2.4rem,calc((100vw_-_5rem)/6.7),14.5rem)]"
+          >
+            MELA HOUSE
+          </p>
+        </div>
+      </div>
+      <h1 className="sr-only">MELA HOUSE — Kadın Giyim ve İç Giyim</h1>
     </section>
   )
 }

@@ -105,7 +105,7 @@ export default function AdminOrdersPage() {
 
                 return (
                   <tr key={order.id} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-3 font-mono font-bold text-[#1A1A1A]">{order.order_number || `VEL-ORD-${order.id.slice(0, 6).toUpperCase()}`}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-[#1A1A1A]">{order.order_number || order.id.slice(0, 8).toUpperCase()}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{customerName}</td>
                     <td className="px-4 py-3 text-gray-500">{new Date(order.created_at).toLocaleDateString('tr-TR')}</td>
                     <td className="px-4 py-3">

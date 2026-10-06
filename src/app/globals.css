@@ -1,14 +1,30 @@
 @import "tailwindcss";
 
+/*
+ * MELA HOUSE tasarım dili
+ * Display: Bodoni Moda (moda dergisi didone'u) — sadece büyük başlıklarda
+ * Metin:   Jost
+ * Not: Tailwind v4 font utility'leri --font-* değişkenlerinden üretilir.
+ * Eski "--font-family-*" adları v4'te çalışmadığı için site sistem fontuyla görünüyordu.
+ * Mevcut bileşenlerdeki font-playfair / font-inter sınıfları korunup yeni fontlara bağlandı.
+ */
 @theme {
-  --color-cream: #FAFAF8;
-  --color-black: #1A1A1A;
-  --color-gold: #C5A572;
-  --color-gold-light: #D4BA8A;
-  --color-gold-dark: #A68B5B;
+  --color-cream: #FFFFFF;
+  --color-black: #171214;
+  --color-ink: #171214;
+  --color-murdum: #3A1D2A;
+  --color-tas: #ECE6DF;
+  --color-kul: #77706B;
+  --color-gold: #B08D57;
+  --color-gold-light: #CDB48A;
+  --color-gold-dark: #8C6D3F;
 
-  --font-family-playfair: var(--font-playfair);
-  --font-family-inter: var(--font-inter);
+  --font-display: var(--font-bodoni), "Didot", "Bodoni 72", Georgia, serif;
+  --font-sans: var(--font-jost), "Helvetica Neue", Arial, sans-serif;
+  --font-playfair: var(--font-bodoni), "Didot", "Bodoni 72", Georgia, serif;
+  --font-inter: var(--font-jost), "Helvetica Neue", Arial, sans-serif;
+
+  --ease-couture: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
@@ -17,18 +33,23 @@
   }
 
   body {
-    background-color: var(--color-cream);
-    color: var(--color-black);
+    background-color: #FFFFFF;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   ::selection {
-    background-color: var(--color-gold);
-    color: var(--color-cream);
+    background-color: var(--color-murdum);
+    color: #FFFFFF;
   }
 
-  /* Custom scrollbar styling */
+  :focus-visible {
+    outline: 1px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -37,11 +58,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-gold);
+    background: #CFC6BC;
     border-radius: 10px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-gold-dark);
+    background: var(--color-gold);
   }
 }
 
@@ -54,27 +75,47 @@
     display: none;
   }
 
+  /* Küçük, aralıklı büyük harf etiket (eyebrow) */
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+
+  /* Altı çizgili metin linki: çizgi soldan sağa dolar */
+  .link-couture {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 100% 1px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    padding-bottom: 3px;
+    transition: background-size 0.5s var(--ease-couture);
+  }
+  .link-couture:hover {
+    background-size: 0% 1px;
+    background-position: 100% 100%;
+  }
+
   .magnetic-btn {
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
   }
   .magnetic-btn:hover {
-    transform: scale(1.05);
+    transform: scale(1.03);
   }
 
   .product-card {
     transition: all 0.4s ease;
   }
-  .product-card:hover {
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  }
-  
+
   .form-input {
-    border-color: #E5E5E5;
+    border-color: #E5E0DA;
     transition: all 0.3s ease;
   }
   .form-input:focus {
-    border-color: var(--color-gold);
-    box-shadow: 0 0 0 1px var(--color-gold);
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 1px var(--color-ink);
     outline: none;
   }
 
@@ -114,12 +155,30 @@
   100% { background-position: 1000px 0; }
 }
 
+/* Hero manşeti: harfler alttan perdeyle açılır */
+@keyframes mastheadRise {
+  from { transform: translateY(105%); }
+  to { transform: translateY(0); }
+}
+
 .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
 .animate-fadeUp { animation: fadeUp 0.6s ease-out forwards; }
 .animate-slideIn { animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-scaleIn { animation: scaleIn 0.4s ease-out forwards; }
 .animate-shimmer {
   animation: shimmer 2s infinite linear;
-  background: linear-gradient(to right, #f6f7f8 4%, #edeef1 25%, #f6f7f8 36%);
+  background: linear-gradient(to right, #f6f4f1 4%, #ece8e3 25%, #f6f4f1 36%);
   background-size: 1000px 100%;
+}
+.animate-masthead {
+  animation: mastheadRise 1.2s var(--ease-couture) 0.15s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

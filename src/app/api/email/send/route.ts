@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendCustomEmail, replaceTemplateVariables } from '@/lib/email';
 import { createClient } from '@/lib/supabase/server';
 
+const MAX_RECIPIENTS_PER_REQUEST = 500;
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
@@ -29,6 +31,16 @@ export async function POST(req: NextRequest) {
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Eksik zorunlu alanlar' }, { status: 400 });
+    }
+
+    const recipientCount = Array.isArray(to)
+      ? to.length
+      : String(to).split(/[,;]/).filter((r) => r.trim()).length;
+    if (recipientCount > MAX_RECIPIENTS_PER_REQUEST) {
+      return NextResponse.json(
+        { error: `Tek seferde en fazla ${MAX_RECIPIENTS_PER_REQUEST} alıcıya e-posta gönderilebilir.` },
+        { status: 400 }
+      );
     }
 
     let emailHtml = html;

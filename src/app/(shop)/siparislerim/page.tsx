@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
@@ -8,7 +7,7 @@ import { Package, Truck, CheckCircle2, Clock, MapPin, RefreshCw } from "lucide-r
 import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "Siparişlerim | MELA HOUSE",
+  title: "Siparişlerim",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any; step: number }> = {
@@ -41,17 +40,17 @@ const renderAddressText = (addr: any) => {
 
 export default async function OrdersPage() {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session) {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
     redirect("/giris?redirect=/siparislerim");
   }
 
-  const adminClient = createAdminClient();
-  const { data: orders } = await adminClient
+  // RLS: kullanıcı sadece kendi siparişlerini okuyabilir
+  const { data: orders } = await supabase
     .from("orders")
     .select("*, order_items(*, products(*, product_images(*)))")
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   return (
@@ -106,7 +105,7 @@ export default async function OrdersPage() {
                       <div>
                         <p className="text-gray-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Sipariş Numarası</p>
                         <p className="font-mono font-bold text-[#1A1A1A]">
-                          {order.order_number || `VEL-ORD-${order.id.slice(0, 6).toUpperCase()}`}
+                          {order.order_number || order.id.slice(0, 8).toUpperCase()}
                         </p>
                       </div>
                     </div>

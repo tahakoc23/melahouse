@@ -601,7 +601,7 @@ export default function AccountPage() {
                           <div className="bg-gray-50 p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3 text-xs">
                             <div>
                               <p className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Sipariş Numarası</p>
-                              <p className="font-mono font-bold text-[#1A1A1A]">{order.order_number || `VEL-ORD-${order.id.slice(0, 6).toUpperCase()}`}</p>
+                              <p className="font-mono font-bold text-[#1A1A1A]">{order.order_number || order.id.slice(0, 8).toUpperCase()}</p>
                             </div>
                             <div>
                               <p className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Tarih</p>

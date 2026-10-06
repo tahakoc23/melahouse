@@ -1,136 +1,172 @@
 import crypto from 'crypto';
 
-interface ShopierOrderData {
+export interface ShopierOrderData {
   orderId: string;
+  orderNumber?: string | null;
   amount: number;
   customerEmail: string;
   customerName: string;
   customerPhone: string;
   shippingAddress: string;
+  city?: string;
+  postcode?: string;
   currency?: string;
   language?: string;
-  isSubscription?: boolean;
+}
+
+export interface ShopierPaymentForm {
+  action: string;
+  fields: Record<string, string>;
+  html: string;
+}
+
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+export function escapeHtml(value: string): string {
+  return String(value).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+function hmacBase64(secret: string, data: string): string {
+  return crypto.createHmac('sha256', secret).update(data).digest('base64');
+}
+
+/** Sabit zamanlı karşılaştırma (base64 imzaları ham bayt olarak karşılaştırır). */
+function safeEqualBase64(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'base64');
+  const bufB = Buffer.from(b, 'base64');
+  if (bufA.length === 0 || bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 export class ShopierPayment {
   private apiKey: string;
   private apiSecret: string;
-  private static readonly ENDPOINT = 'https://shopier.com/ShowProduct/api_pay4.php';
+  static readonly ENDPOINT = 'https://shopier.com/ShowProduct/api_pay4.php';
 
   constructor(apiKey: string, apiSecret: string) {
     this.apiKey = apiKey;
     this.apiSecret = apiSecret;
   }
 
-  public createPaymentForm(data: ShopierOrderData): string {
+  public createPaymentForm(data: ShopierOrderData): ShopierPaymentForm {
     const {
       orderId,
+      orderNumber,
       amount,
       customerEmail,
       customerName,
       customerPhone,
       shippingAddress,
+      city = '-',
+      postcode = '-',
       currency = '0', // 0: TRY
       language = 'tr',
-      isSubscription = false,
     } = data;
 
-    // Convert amount to the expected format (e.g., 10.50)
-    const formattedAmount = amount.toFixed(2);
-    const returnUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/shopier/callback`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!siteUrl) {
+      throw new Error('NEXT_PUBLIC_SITE_URL tanımlı değil; Shopier dönüş adresi oluşturulamıyor.');
+    }
 
+    const nameParts = customerName.trim().split(/\s+/);
     const args: Record<string, string> = {
       API_key: this.apiKey,
       website_index: '1',
       platform_order_id: orderId,
-      product_name: `Sipariş #${orderId}`,
-      product_type: '1', // 1 for physical goods, 2 for digital
-      buyer_name: customerName.split(' ')[0] || '',
-      buyer_surname: customerName.split(' ').slice(1).join(' ') || '',
+      product_name: `Sipariş #${orderNumber || orderId}`,
+      product_type: '1', // 1: fiziksel ürün, 2: dijital
+      buyer_name: nameParts[0] || '',
+      buyer_surname: nameParts.slice(1).join(' ') || '-',
       buyer_email: customerEmail,
       buyer_account_age: '0',
       buyer_id_nr: '0',
       buyer_phone: customerPhone,
       billing_address: shippingAddress,
-      billing_city: '-', // Optional
+      billing_city: city,
       billing_country: 'Türkiye',
-      billing_postcode: '-', // Optional
+      billing_postcode: postcode,
       shipping_address: shippingAddress,
-      shipping_city: '-', // Optional
+      shipping_city: city,
       shipping_country: 'Türkiye',
-      shipping_postcode: '-', // Optional
-      total_order_value: formattedAmount,
+      shipping_postcode: postcode,
+      total_order_value: amount.toFixed(2),
       currency,
       platform: '0',
       is_in_frame: '0',
       current_language: language,
       modul_version: '1.0.0',
-      random_nr: Math.floor(Math.random() * 1000000).toString(),
+      random_nr: crypto.randomInt(100000, 1000000).toString(),
     };
 
-    const signatureString = args.random_nr + args.platform_order_id + args.total_order_value + args.currency;
-    const signature = crypto
-      .createHmac('sha256', this.apiSecret)
-      .update(signatureString)
-      .digest('base64');
-    
-    args.signature = signature;
-    args.return_url = returnUrl;
+    // TODO(shopier): İmza algoritmasını Shopier dokümanı ile ve gerçek bir test ödemesiyle doğrulayın.
+    // Mevcut uygulama: base64(HMAC-SHA256(random_nr + platform_order_id + total_order_value + currency)).
+    args.signature = hmacBase64(this.apiSecret, args.random_nr + args.platform_order_id + args.total_order_value + args.currency);
+    // Not: Shopier dönüş (callback) adresi Shopier panelinde de bu URL olarak tanımlı olmalıdır.
+    args.return_url = `${siteUrl}/api/shopier/callback`;
 
-    let formHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-          <meta charset="utf-8">
-          <title>Shopier ile Ödeme</title>
-      </head>
-      <body>
-          <form id="shopier_form" method="post" action="${ShopierPayment.ENDPOINT}">
-    `;
+    const inputs = Object.entries(args)
+      .map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`)
+      .join('\n');
 
-    for (const [key, value] of Object.entries(args)) {
-      formHtml += `<input type="hidden" name="${key}" value="${value}">\n`;
-    }
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Shopier ile Ödeme</title></head>
+<body>
+<form id="shopier_form" method="post" action="${escapeHtml(ShopierPayment.ENDPOINT)}">
+${inputs}
+</form>
+<script>document.getElementById("shopier_form").submit();</script>
+</body>
+</html>`;
 
-    formHtml += `
-          </form>
-          <script type="text/javascript">
-              document.getElementById("shopier_form").submit();
-          </script>
-      </body>
-      </html>
-    `;
-
-    return formHtml;
+    return { action: ShopierPayment.ENDPOINT, fields: args, html };
   }
 
-  public verifyCallback(postData: any): boolean {
-    const { status, invoice_id, order_id, platform_order_id, random_nr, signature, custom_field, installment } = postData;
-    
-    if (!signature) {
-      return false;
+  /**
+   * Shopier dönüşündeki imzayı doğrular.
+   * TODO(shopier): Shopier dokümanına göre imza base64(HMAC-SHA256(random_nr + platform_order_id)) olmalıdır;
+   * önceki kod ayrıca invoice_id ekliyordu. İkisi de gizli anahtar gerektirdiğinden her iki biçim kabul edilir.
+   * Gerçek bir test ödemesiyle hangisinin geldiğini doğrulayıp diğerini kaldırın.
+   * NOT: Bu imza `status` alanını kapsamaz; bkz. callback route'undaki uyarı.
+   */
+  public verifyCallback(postData: Record<string, unknown>): boolean {
+    const signature = typeof postData.signature === 'string' ? postData.signature : '';
+    const randomNr = typeof postData.random_nr === 'string' ? postData.random_nr : '';
+    const platformOrderId = typeof postData.platform_order_id === 'string' ? postData.platform_order_id : '';
+    if (!signature || !randomNr || !platformOrderId) return false;
+
+    const candidates = [hmacBase64(this.apiSecret, randomNr + platformOrderId)];
+    const invoiceId = typeof postData.invoice_id === 'string' ? postData.invoice_id : '';
+    if (invoiceId) candidates.push(hmacBase64(this.apiSecret, randomNr + platformOrderId + invoiceId));
+
+    // Kısa devre yapmadan tüm adayları karşılaştır
+    let ok = false;
+    for (const expected of candidates) {
+      if (safeEqualBase64(signature, expected)) ok = true;
     }
-
-    const signatureString = random_nr + platform_order_id + invoice_id;
-    const expectedSignature = crypto
-      .createHmac('sha256', this.apiSecret)
-      .update(signatureString)
-      .digest('base64');
-
-    return signature === expectedSignature;
+    return ok;
   }
 }
 
-export function createShopierPayment(data: ShopierOrderData): string {
-  const apiKey = process.env.SHOPIER_API_KEY || 'placeholder_api_key';
-  const apiSecret = process.env.SHOPIER_API_SECRET || 'placeholder_api_secret';
-  const shopier = new ShopierPayment(apiKey, apiSecret);
-  return shopier.createPaymentForm(data);
+function getShopier(): ShopierPayment {
+  const apiKey = process.env.SHOPIER_API_KEY;
+  const apiSecret = process.env.SHOPIER_API_SECRET;
+  if (!apiKey || !apiSecret) {
+    throw new Error('SHOPIER_API_KEY / SHOPIER_API_SECRET ortam değişkenleri tanımlı değil.');
+  }
+  return new ShopierPayment(apiKey, apiSecret);
 }
 
-export function verifyShopierCallback(postData: any): boolean {
-  const apiKey = process.env.SHOPIER_API_KEY || 'placeholder_api_key';
-  const apiSecret = process.env.SHOPIER_API_SECRET || 'placeholder_api_secret';
-  const shopier = new ShopierPayment(apiKey, apiSecret);
-  return shopier.verifyCallback(postData);
+export function createShopierPayment(data: ShopierOrderData): ShopierPaymentForm {
+  return getShopier().createPaymentForm(data);
+}
+
+export function verifyShopierCallback(postData: Record<string, unknown>): boolean {
+  return getShopier().verifyCallback(postData);
 }

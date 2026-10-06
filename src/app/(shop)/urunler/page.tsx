@@ -1,26 +1,21 @@
-// @ts-nocheck
-import { createAdminClient } from '@/lib/supabase/admin';
+import type { Metadata } from 'next';
+import { createPublicClient } from '@/lib/supabase/public';
 import ProductGrid from '@/components/product/ProductGrid';
 import FilterSidebar from '@/components/product/FilterSidebar';
+import {
+  LISTING_SELECT,
+  buildListing,
+  findStaticCategory,
+  formatListingProduct,
+  normalizeSlug,
+  productInCategories,
+} from '@/components/product/catalog';
 
-export const metadata = {
-  title: 'Tüm Ürünler | MELA HOUSE',
-};
-
-const normalizeSlug = (str: string) => {
-  if (!str) return '';
-  return str
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/ğ/g, 'g')
-    .replace(/ü/g, 'u')
-    .replace(/ş/g, 's')
-    .replace(/ı/g, 'i')
-    .replace(/ö/g, 'o')
-    .replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
+// Root layout template appends "| MELA HOUSE"
+export const metadata: Metadata = {
+  title: 'Tüm Ürünler',
+  description: 'MELA HOUSE lüks kadın giyim koleksiyonunun tamamını keşfedin.',
+  alternates: { canonical: '/urunler' },
 };
 
 export default async function ProductsPage({
@@ -29,114 +24,43 @@ export default async function ProductsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
-  const supabase = createAdminClient();
+  const supabase = createPublicClient();
 
   const { data: dbProducts } = await supabase
     .from('products')
-    .select(`
-      *,
-      categories ( id, name, slug ),
-      product_images ( image_url, is_primary, sort_order ),
-      product_variants ( color_name, color_hex, size )
-    `)
+    .select(LISTING_SELECT)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
-  const formattedDbProducts = dbProducts?.map(p => {
-    const validImages = p.product_images?.filter(i => i.image_url && !i.image_url.startsWith('blob:')) || [];
-    const primaryImg = validImages[0]?.image_url || '';
-    const catSlug = p.categories?.slug || (Array.isArray(p.tags) ? normalizeSlug(p.tags[0]) : normalizeSlug(p.tags || ''));
-    
-    return {
-      ...p,
-      primary_image: primaryImg,
-      category_slug: catSlug,
-      tags: Array.isArray(p.tags) ? p.tags : (p.tags ? [p.tags] : ['Elbise'])
-    };
-  }) || [];
+  let scope = (dbProducts || []).map(formatListingProduct);
 
-  let list = formattedDbProducts;
-
-  // Extract exact color names & sizes from DB products
-  const colorMap = new Map<string, string>();
-  list.forEach(p => {
-    p.product_variants?.forEach((v: any) => {
-      if (v.color_name && v.color_hex && !colorMap.has(v.color_name)) {
-        colorMap.set(v.color_name, v.color_hex);
-      }
-    });
-  });
-
-  if (colorMap.size === 0) {
-    colorMap.set('Siyah', '#1A1A1A');
-    colorMap.set('Şampanya', '#E6D5C3');
-    colorMap.set('Kırmızı', '#D62828');
-    colorMap.set('Altın', '#C5A572');
-  }
-
-  const availableColors = Array.from(colorMap.entries()).map(([name, hex]) => ({ name, hex }));
-  const availableSizes = Array.from(new Set(list.flatMap(p => (p.product_variants?.map((v: any) => v.size) || p.sizes || [])).filter(Boolean)));
-
-  // Filter Category / Subcategory
+  // Legacy ?category= support (links now go to /kategori/[slug])
   if (resolvedParams.category) {
     const targetCat = normalizeSlug(String(resolvedParams.category));
     if (targetCat === 'en-cok-satanlar' || targetCat === 'one-cikanlar') {
-      list = list.filter(p => p.is_featured === true);
+      scope = scope.filter((p) => p.is_featured === true);
     } else {
-      list = list.filter(p => {
-        if (p.categories?.slug && normalizeSlug(p.categories.slug) === targetCat) return true;
-        if (p.category_slug && normalizeSlug(p.category_slug) === targetCat) return true;
-        if (p.parent_category && normalizeSlug(p.parent_category) === targetCat) return true;
-        if (Array.isArray(p.tags)) {
-          return p.tags.some((t: string) => {
-            const normTag = normalizeSlug(t);
-            return normTag === targetCat || targetCat.includes(normTag) || normTag.includes(targetCat);
-          });
-        }
-        return false;
-      });
+      const slugs = findStaticCategory(targetCat)?.slugs || [targetCat];
+      scope = scope.filter((p) => productInCategories(p, slugs));
     }
   }
 
-  // Filter / Sort En Çok Satanlar (is_featured)
-  if (resolvedParams.sort === 'en-cok-satan' || resolvedParams.filter === 'en-cok-satan') {
-    const featuredList = list.filter(p => p.is_featured === true);
-    // If featured items exist, filter by featured; otherwise place featured items at top
-    list = featuredList.length > 0 ? featuredList : [...list].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
-  } else if (resolvedParams.sort === 'fiyat-artan') {
-    list = [...list].sort((a, b) => Number(a.base_price || 0) - Number(b.base_price || 0));
-  } else if (resolvedParams.sort === 'fiyat-azalan') {
-    list = [...list].sort((a, b) => Number(b.base_price || 0) - Number(a.base_price || 0));
-  }
-
-  // Filter Color
-  if (resolvedParams.color) {
-    const selectedColors = Array.isArray(resolvedParams.color) ? resolvedParams.color : [resolvedParams.color];
-    list = list.filter(p => {
-      const pColors = p.product_variants?.map((v: any) => v.color_name) || [p.color_name];
-      return pColors.some((c: string) => selectedColors.includes(c));
-    });
-  }
-
-  // Filter Size
-  if (resolvedParams.size) {
-    const selectedSizes = Array.isArray(resolvedParams.size) ? resolvedParams.size : [resolvedParams.size];
-    list = list.filter(p => {
-      const pSizes = p.product_variants?.map((v: any) => v.size) || p.sizes || [];
-      return pSizes.some((s: string) => selectedSizes.includes(s));
-    });
-  }
+  const { products, totalCount, currentPage, availableColors, availableSizes } = buildListing(
+    scope,
+    resolvedParams
+  );
 
   return (
     <div className="bg-[#FAFAF8] min-h-screen pt-28 md:pt-36">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        <h1 className="sr-only">Tüm Ürünler</h1>
         <div className="flex flex-col md:flex-row gap-8">
           <aside className="w-full md:w-64 flex-shrink-0">
             <FilterSidebar availableColors={availableColors} availableSizes={availableSizes} />
           </aside>
-          
+
           <main className="flex-1">
-            <ProductGrid products={list} totalCount={list.length} currentPage={1} />
+            <ProductGrid products={products} totalCount={totalCount} currentPage={currentPage} />
           </main>
         </div>
       </div>
