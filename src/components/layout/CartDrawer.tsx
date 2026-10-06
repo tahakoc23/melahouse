@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTL } from "@/lib/utils";
 import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -127,7 +128,7 @@ export default function CartDrawer() {
                             </button>
                           </div>
                           <span className="font-semibold text-[#1A1A1A] text-sm">
-                            {(item.price * item.quantity).toLocaleString('tr-TR')} ₺
+                            {formatTL((item.price * item.quantity))}
                           </span>
                         </div>
                       </div>
@@ -141,7 +142,7 @@ export default function CartDrawer() {
               <div className="p-6 bg-white border-t border-gray-200 font-inter space-y-4">
                 <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>Ara Toplam</span>
-                  <span>{total.toLocaleString('tr-TR')} ₺</span>
+                  <span>{formatTL(total)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>Kargo</span>
@@ -150,7 +151,7 @@ export default function CartDrawer() {
                 <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                   <span className="font-playfair text-xl font-semibold text-[#1A1A1A]">Toplam</span>
                   <span className="font-playfair text-xl font-semibold text-[#1A1A1A]">
-                    {(total + shipping).toLocaleString('tr-TR')} ₺
+                    {formatTL((total + shipping))}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 pt-4">

@@ -313,7 +313,7 @@ export default function AdminDashboard() {
               {visitorFilter === 'year' && `${visitorStats.year || 1} Tekil Ziyaretçi`}
             </p>
             <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-              {visitorFilter === 'today' && 'Bugün giren farkı kişi sayısı'}
+              {visitorFilter === 'today' && 'Bugün giren farklı kişi sayısı'}
               {visitorFilter === 'week' && 'Son 7 günde giren farklı kişi'}
               {visitorFilter === 'month' && 'Bu ay giren farklı kişi sayısı'}
               {visitorFilter === 'year' && `${selectedYear} yılında giren farklı kişi`}

@@ -23,27 +23,27 @@ export default function AdminContentPage() {
   const [slides, setSlides] = useState<any[]>([
     {
       id: 'slide-1',
-      title: 'ZAMANSIZ LÜKS & İPEK KOLEKSİYONU',
-      subtitle: 'MELA HOUSE 2026 Özel Gece ve Abiye Tasarımları',
-      button_text: 'KOLEKSİYONU KEŞFET',
+      title: 'Yeni sezon, sakin bir zarafetle.',
+      subtitle: 'Sonbahar · Kış 2026',
+      button_text: 'Koleksiyonu keşfet',
       button_link: '/urunler',
-      media_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1600&auto=format&fit=crop'
+      media_url: 'https://images.unsplash.com/photo-1571513800374-df1bbe650e56?q=75&w=1800&auto=format&fit=crop'
     }
   ])
 
   // Announcement Bar State (Sitenin En Üst Duyuru Bantı)
   const [announcements, setAnnouncements] = useState<string[]>([
-    'Ücretsiz Kargo — 1000 TL Üzeri Siparişlerde',
-    'MELA HOUSE Lüks Kadın Giyim — Yeni Sezon Koleksiyonu Yayında'
+    '1.000 TL ve üzeri siparişlerde ücretsiz kargo',
+    'Teslimattan itibaren 14 gün içinde iade'
   ])
 
   // Lookbook State (Marka Hikayesi ve Editoryal Görsel)
   const [lookbook, setLookbook] = useState({
-    title: 'İtalyan İpeği & El İşçiliği Zarafeti',
-    description: 'MELA HOUSE, her bir dikişinde yüksek terzilik sanatını ve zamansız kadın zarafetini buluşturuyor. Özel geceleriniz ve davetleriniz için tasarlanan siluetler...',
-    button_text: 'HİKAYEMİZİ KEŞFET',
+    title: 'Az parça, doğru parça.',
+    description: 'MELA HOUSE, günlükten davete uzanan bir kadın gardırobunu kumaşı ve kalıbı özenle seçilmiş parçalarla kurar. Koleksiyonlarımızı her sezon küçük ve seçkin tutuyoruz; böylece her parça diğerleriyle kolayca eşleşir.',
+    button_text: 'Hikayemiz',
     button_link: '/hakkimizda',
-    media_url: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1200&auto=format&fit=crop'
+    media_url: 'https://images.unsplash.com/photo-1637248666370-70a4a603c23e?q=80&w=1400&auto=format&fit=crop'
   })
 
   useEffect(() => {
@@ -54,7 +54,9 @@ export default function AdminContentPage() {
     try {
       const { data } = await supabase.from('site_content' as any).select('*')
       if (data && data.length > 0) {
-        const sliderItems = data.filter((d: any) => d.content_type === 'slider')
+        const sliderItems = data
+          .filter((d: any) => d.content_type === 'slider')
+          .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         if (sliderItems.length > 0) {
           setSlides(sliderItems.map((s: any) => ({
             id: s.id,
@@ -65,6 +67,13 @@ export default function AdminContentPage() {
             media_url: s.media_url || ''
           })))
         }
+
+        const announcementItems = data
+          .filter((d: any) => d.content_type === 'announcement')
+          .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((d: any) => d.title || '')
+          .filter(Boolean)
+        if (announcementItems.length > 0) setAnnouncements(announcementItems)
 
         const lookbookItem = data.find((d: any) => d.content_key === 'lookbook_section')
         if (lookbookItem) {
@@ -85,10 +94,10 @@ export default function AdminContentPage() {
   const handleSaveSlider = async () => {
     setLoading(true)
     try {
-      for (const [idx, slide] of slides.entries()) {
-        const { error } = await supabase.from('site_content' as any).upsert({
-          id: slide.id.startsWith('slide-') ? undefined : slide.id,
-          content_key: `hero_slide_${slide.id}`,
+      const rows = slides
+        .filter((slide: any) => slide.media_url)
+        .map((slide: any, idx: number) => ({
+          content_key: `hero_slide_${idx + 1}`,
           content_type: 'slider',
           title: slide.title,
           subtitle: slide.subtitle,
@@ -97,7 +106,11 @@ export default function AdminContentPage() {
           media_url: slide.media_url,
           sort_order: idx,
           is_active: true
-        })
+        }))
+      const { error: delError } = await supabase.from('site_content' as any).delete().eq('content_type', 'slider')
+      if (delError) throw delError
+      if (rows.length > 0) {
+        const { error } = await supabase.from('site_content' as any).insert(rows)
         if (error) throw error
       }
       setModalConfig({
@@ -112,6 +125,43 @@ export default function AdminContentPage() {
         type: 'error',
         title: 'Kaydedilirken Hata Oluştu',
         message: err.message || 'İçerik kaydedilemedi.'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveAnnouncements = async () => {
+    setLoading(true)
+    try {
+      const rows = announcements
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((title, idx) => ({
+          content_key: `announcement_${idx + 1}`,
+          content_type: 'announcement',
+          title,
+          sort_order: idx,
+          is_active: true
+        }))
+      const { error: delError } = await supabase.from('site_content' as any).delete().eq('content_type', 'announcement')
+      if (delError) throw delError
+      if (rows.length > 0) {
+        const { error } = await supabase.from('site_content' as any).insert(rows)
+        if (error) throw error
+      }
+      setModalConfig({
+        isOpen: true,
+        type: 'success',
+        title: 'Duyurular Güncellendi',
+        message: 'En üst duyuru bandı kaydedildi.'
+      })
+    } catch (err: any) {
+      setModalConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Kaydedilirken Hata Oluştu',
+        message: err.message || 'Duyurular kaydedilemedi.'
       })
     } finally {
       setLoading(false)
@@ -336,7 +386,7 @@ export default function AdminContentPage() {
         <div className="space-y-6">
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xs text-xs text-amber-900">
             <p className="font-bold">📌 Nerede Görünür?</p>
-            <p>Bu alan, sitemizin <strong>en tepesinde bulunan siyah/altın renkli duyuru bantıdır</strong>. Müşterilerinize "Ücretsiz Kargo", "Sezon İndirimi" gibi kampanya duyurularını buradan yazabilirsiniz.</p>
+            <p>Bu alan, sitemizin <strong>en tepesindeki mürdüm renkli duyuru bandıdır</strong>. Müşterilerinize "Ücretsiz Kargo", "Sezon İndirimi" gibi kampanya duyurularını buradan yazabilirsiniz.</p>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
@@ -373,6 +423,16 @@ export default function AdminContentPage() {
             >
               <Plus size={16} className="text-[#C5A572]" />
               <span>Yeni Duyuru Metni Ekle</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleSaveAnnouncements}
+              className="bg-[#1A1A1A] hover:bg-[#C5A572] text-white px-6 py-2.5 rounded-xs text-xs font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+            >
+              <Save size={16} />
+              <span>Duyuruları Kaydet</span>
             </button>
           </div>
         </div>

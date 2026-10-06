@@ -74,7 +74,7 @@ export default function Header() {
   const { items } = useCartStore();
   const cartItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const handleSignOut = async () => {
@@ -179,7 +179,10 @@ export default function Header() {
                 </Link>
               )}
 
-              {user ? (
+              {authLoading ? (
+                // Oturum bilgisi gelene kadar yer tut: 'Giriş Yap' bir an görünüp kaybolmasın
+                <span className="hidden md:block w-28" aria-hidden />
+              ) : user ? (
                 <div className="hidden md:flex items-center gap-3">
                   <Link 
                     href="/hesabim" 

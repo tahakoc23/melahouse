@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTL } from "@/lib/utils";
 import { useState, useCallback } from 'react';
 import VariantSelector, { type Variant } from './VariantSelector';
 import { effectivePrice } from './catalog';
@@ -184,7 +185,7 @@ export default function ProductActions({ product }: ProductActionsProps) {
               ? 'Bu seçenek tükendi'
               : needsSelection
               ? 'Renk / Beden Seçiniz'
-              : `Sepete Ekle — ${(priceToUse * effectiveQuantity).toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺`}
+              : `Sepete Ekle — ${formatTL((priceToUse * effectiveQuantity))}`}
           </button>
         )}
 

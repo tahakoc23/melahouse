@@ -13,6 +13,14 @@ export function formatPrice(price: number): string {
   }).format(price)
 }
 
+/** 2499.9 -> "2.499,90 ₺" (her zaman 2 kuruş hanesi) */
+export function formatTL(price: number | null | undefined): string {
+  const amount = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+    Number(price) || 0,
+  )
+  return `${amount} ₺`
+}
+
 export function slugify(text: string): string {
   return text
     .toString()

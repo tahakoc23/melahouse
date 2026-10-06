@@ -44,10 +44,18 @@ export default function HeroSlider({ slides }: HeroSliderProps) {
   const activeSlides = slides && slides.length > 0 ? slides : DEFAULT_SLIDES
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  // İlk kapak sunucudan hazır gelsin: animasyonla görünmez başlarsa sayfa ~1,5 sn siyah kalıyordu.
+  // Kullanıcı ya da zamanlayıcı slayt değiştirdikten sonra geçişler animasyonlu olur.
+  const [animateIn, setAnimateIn] = useState(false)
+  const goTo = (next: number) => {
+    setAnimateIn(true)
+    setCurrentIndex(next)
+  }
 
   useEffect(() => {
     if (activeSlides.length <= 1 || isPaused) return
     const timer = setInterval(() => {
+      setAnimateIn(true)
       setCurrentIndex(prev => (prev + 1) % activeSlides.length)
     }, 7000)
     return () => clearInterval(timer)
@@ -65,7 +73,7 @@ export default function HeroSlider({ slides }: HeroSliderProps) {
       <AnimatePresence mode="sync">
         <motion.div
           key={currentSlide.id}
-          initial={{ opacity: 0, scale: 1.04 }}
+          initial={animateIn ? { opacity: 0, scale: 1.04 } : false}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 1.6, ease }}
@@ -90,7 +98,7 @@ export default function HeroSlider({ slides }: HeroSliderProps) {
           <AnimatePresence mode="wait">
             <motion.div
               key={`copy-${currentSlide.id}`}
-              initial={{ opacity: 0, y: 16 }}
+              initial={animateIn ? { opacity: 0, y: 16 } : false}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.8, ease, delay: 0.25 }}
@@ -122,7 +130,7 @@ export default function HeroSlider({ slides }: HeroSliderProps) {
                     key={s.id}
                     role="tab"
                     aria-selected={idx === currentIndex}
-                    onClick={() => setCurrentIndex(idx)}
+                    onClick={() => goTo(idx)}
                     className="py-3 cursor-pointer"
                     aria-label={`${idx + 1}. görsel`}
                   >

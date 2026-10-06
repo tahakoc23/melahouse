@@ -1,5 +1,6 @@
 "use client";
 
+import { formatTL } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartStore, type CartItem } from "@/stores/cartStore";
@@ -251,6 +252,10 @@ export default function CheckoutPage() {
     setStep(2);
   };
 
+  // Kartla ödemede ödeme sayfası açılamazsa oluşan sipariş burada tutulur;
+  // sepet/adres değişmeden tekrar denenirse yeni sipariş açılmaz, aynısı kullanılır.
+  const [pendingCardOrder, setPendingCardOrder] = useState<{ key: string; orderId: string } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     if (processing) return;
@@ -266,23 +271,32 @@ export default function CheckoutPage() {
     let redirecting = false;
 
     try {
+      const orderKey = JSON.stringify({ items: toOrderItems(items), address, paymentMethod });
+      const reusePending = paymentMethod === 'card' && pendingCardOrder?.key === orderKey;
+
       // 1) Siparişi sunucuda oluştur (fiyatlar, stok ve kargo sunucuda hesaplanır)
-      const res = await fetch("/api/shop/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: toOrderItems(items), address, paymentMethod }),
-      });
-      const order = await readJson(res);
-      if (res.status === 401) {
-        router.push("/giris?redirect=/odeme");
-        throw new Error(order.error || "Sipariş verebilmek için lütfen giriş yapın.");
-      }
-      if (!res.ok || !order.orderId) {
-        throw new Error(order.error || "Sipariş oluşturulamadı. Lütfen tekrar deneyin.");
+      let order: ApiJson;
+      if (reusePending) {
+        order = { orderId: pendingCardOrder!.orderId };
+      } else {
+        const res = await fetch("/api/shop/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: orderKey,
+        });
+        order = await readJson(res);
+        if (res.status === 401) {
+          router.push("/giris?redirect=/odeme");
+          throw new Error(order.error || "Sipariş verebilmek için lütfen giriş yapın.");
+        }
+        if (!res.ok || !order.orderId) {
+          throw new Error(order.error || "Sipariş oluşturulamadı. Lütfen tekrar deneyin.");
+        }
+        if (paymentMethod === 'card') setPendingCardOrder({ key: orderKey, orderId: order.orderId });
       }
 
       // Yeni adresi kaydet (sipariş başarıyla oluştuktan sonra; hata siparişi engellemez)
-      if (selectedAddressId === 'new' && saveNewAddress) {
+      if (!reusePending && selectedAddressId === 'new' && saveNewAddress) {
         try {
           await supabase.from("addresses" as never).insert({
             user_id: user.id,
@@ -430,7 +444,7 @@ export default function CheckoutPage() {
             <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
               <span className="font-bold text-[#1A1A1A] text-xs">Ödeme Tutarı:</span>
               <span className="font-bold text-sm text-[#1A1A1A] bg-amber-50 border border-amber-200 px-3 py-1 rounded-xs">
-                {displayPaidTotal.toLocaleString('tr-TR')} ₺ <span className="text-emerald-700 font-semibold text-xs ml-1">(Kapıda Ödeme)</span>
+                {formatTL(displayPaidTotal)} <span className="text-emerald-700 font-semibold text-xs ml-1">(Kapıda Ödeme)</span>
               </span>
             </div>
           </div>
@@ -733,7 +747,7 @@ export default function CheckoutPage() {
                           ) : (
                             <>
                               <ShieldCheck className="w-4 h-4" />
-                              <span>Siparişi Onayla & Shopier ile Öde ({finalTotal.toLocaleString('tr-TR')} ₺)</span>
+                              <span>Siparişi Onayla & Shopier ile Öde ({formatTL(finalTotal)})</span>
                             </>
                           )}
                         </button>
@@ -760,7 +774,7 @@ export default function CheckoutPage() {
                         ) : (
                           <>
                             <Truck className="w-4 h-4" />
-                            <span>Kapıda Ödeme İle Siparişi Tamamla ({finalTotal.toLocaleString('tr-TR')} ₺)</span>
+                            <span>Kapıda Ödeme İle Siparişi Tamamla ({formatTL(finalTotal)})</span>
                           </>
                         )}
                       </button>
@@ -787,7 +801,7 @@ export default function CheckoutPage() {
                       <p className="text-gray-400 text-[10px]">{item.variantInfo || 'Standart'}</p>
                       <div className="flex justify-between items-center mt-1">
                         <span className="text-gray-500">{item.quantity} Adet</span>
-                        <span className="font-semibold text-[#1A1A1A]">{(item.price * item.quantity).toLocaleString('tr-TR')} ₺</span>
+                        <span className="font-semibold text-[#1A1A1A]">{formatTL((item.price * item.quantity))}</span>
                       </div>
                     </div>
                   </div>
@@ -797,7 +811,7 @@ export default function CheckoutPage() {
               <div className="space-y-2 pt-2 text-xs border-t border-gray-200 text-[#1A1A1A]">
                 <div className="flex justify-between">
                   <span>Ara Toplam</span>
-                  <span>{total.toLocaleString('tr-TR')} ₺</span>
+                  <span>{formatTL(total)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Kargo Ücreti</span>
@@ -805,7 +819,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-base font-bold text-[#1A1A1A] pt-3 border-t border-gray-200">
                   <span>Genel Toplam</span>
-                  <span>{finalTotal.toLocaleString('tr-TR')} ₺</span>
+                  <span>{formatTL(finalTotal)}</span>
                 </div>
                 {serverQuote && Math.abs(serverQuote.total - (localSubtotal + localShipping)) > 0.009 && (
                   <p className="text-[10px] text-amber-700">Ürün fiyatları güncellendi; geçerli tutar yukarıda gösterilmektedir.</p>

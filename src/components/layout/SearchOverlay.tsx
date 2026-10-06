@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTL } from "@/lib/utils";
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, ShoppingBag } from 'lucide-react';
@@ -44,7 +45,7 @@ function getPrimaryImage(p: SearchResult): string | null {
 }
 
 function formatTry(n: number) {
-  return `${n.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺`;
+  return `${formatTL(n)}`;
 }
 
 export default function SearchOverlay() {

@@ -1,6 +1,7 @@
 // @ts-nocheck
 "use client";
 
+import { formatTL } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
@@ -46,6 +47,13 @@ export default function AccountPage() {
   const supabase = createClient();
   
   const [activeTab, setActiveTab] = useState<"profile" | "addresses" | "orders">("profile");
+
+  // /hesabim?sekme=siparisler veya ?sekme=adresler ile doğrudan ilgili sekme açılır
+  useEffect(() => {
+    const sekme = new URLSearchParams(window.location.search).get("sekme");
+    if (sekme === "siparisler") setActiveTab("orders");
+    else if (sekme === "adresler") setActiveTab("addresses");
+  }, []);
 
   // Profile States
   const [fullName, setFullName] = useState("");
@@ -609,7 +617,7 @@ export default function AccountPage() {
                             </div>
                             <div>
                               <p className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Toplam Tutar</p>
-                              <p className="font-bold text-[#1A1A1A] text-xs">{calculatedTotal.toLocaleString('tr-TR')} ₺</p>
+                              <p className="font-bold text-[#1A1A1A] text-xs">{formatTL(calculatedTotal)}</p>
                             </div>
                             <div className={`px-3.5 py-1.5 rounded-full border flex items-center gap-1.5 font-bold text-xs ${statusCfg.color}`}>
                               <StatusIcon className="w-3.5 h-3.5" />
@@ -734,7 +742,7 @@ export default function AccountPage() {
                                     <h4 className="font-semibold text-[#1A1A1A] text-xs">{product?.name || item.product_name || "Ürün"}</h4>
                                     <p className="text-gray-500 text-[10px] mt-0.5">Adet: {item.quantity}</p>
                                   </div>
-                                  <p className="font-semibold text-[#1A1A1A] text-xs">{((item.unit_price || 0) * (item.quantity || 1)).toLocaleString('tr-TR')} ₺</p>
+                                  <p className="font-semibold text-[#1A1A1A] text-xs">{formatTL(((item.unit_price || 0) * (item.quantity || 1)))}</p>
                                 </div>
                               );
                             })}

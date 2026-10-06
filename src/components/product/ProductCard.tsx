@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTL } from "@/lib/utils";
 import Link from 'next/link';
 import Image from 'next/image';
 import { isVideoUrl, getMediaType } from '@/components/admin/ImageUploader';
@@ -148,15 +149,15 @@ export default function ProductCard({ product }: ProductCardProps) {
           {hasDiscount ? (
             <>
               <span className="text-xs sm:text-sm font-bold text-[#1A1A1A]">
-                {product.sale_price?.toLocaleString('tr-TR')} ₺
+                {formatTL(product.sale_price)}
               </span>
               <span className="text-[11px] text-gray-400 line-through">
-                {product.base_price?.toLocaleString('tr-TR')} ₺
+                {formatTL(product.base_price)}
               </span>
             </>
           ) : (
             <span className="text-xs sm:text-sm font-bold text-[#1A1A1A]">
-              {product.base_price?.toLocaleString('tr-TR')} ₺
+              {formatTL(product.base_price)}
             </span>
           )}
         </div>

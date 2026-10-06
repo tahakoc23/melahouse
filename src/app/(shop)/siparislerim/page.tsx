@@ -117,6 +117,16 @@ export default async function OrdersPage() {
                     </div>
                   </div>
 
+                  {/* İade: teslimattan sonraki 14 gün içinde Hesabım > Siparişlerim üzerinden başlatılır */}
+                  {canReturn && (
+                    <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-gray-600">Bu sipariş için 14 günlük iade hakkınız devam ediyor.</span>
+                      <Link href="/hesabim?sekme=siparisler" className="inline-flex items-center gap-1.5 font-semibold underline underline-offset-4">
+                        <RefreshCw className="w-3.5 h-3.5" /> İade talebi başlat
+                      </Link>
+                    </div>
+                  )}
+
                   {/* Cargo Shipping Details Banner (if available) */}
                   {(order.cargo_company || order.cargo_tracking_number) && (
                     <div className="bg-purple-50/70 border-b border-purple-100 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-purple-950">

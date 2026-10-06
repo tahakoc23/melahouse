@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { formatTL } from "@/lib/utils";
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
@@ -119,7 +120,7 @@ export default async function ProductDetailPage({
     { name: product.name, url: productUrl },
   ];
 
-  const formatTry = (n: number) => `${n.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺`;
+  const formatTry = (n: number) => `${formatTL(n)}`;
 
   return (
     <div className="bg-[#FAFAF8] min-h-screen pt-32 md:pt-48 font-inter">

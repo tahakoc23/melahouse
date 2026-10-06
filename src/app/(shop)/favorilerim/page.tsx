@@ -43,9 +43,12 @@ export default function WishlistPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-            {items.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            {/* items favori kayıtlarıdır; ürün bilgisi item.product içinde */}
+            {items
+              .filter((item) => item.product)
+              .map((item) => (
+                <ProductCard key={item.id} product={item.product} />
+              ))}
           </div>
         )}
       </div>

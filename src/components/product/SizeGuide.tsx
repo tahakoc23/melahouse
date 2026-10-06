@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SizeGuideProps {
@@ -21,6 +21,17 @@ export default function SizeGuide({ isOpen: controlledIsOpen, onClose }: SizeGui
       setInternalIsOpen(false);
     }
   };
+
+  // Escape ile kapat
+  useEffect(() => {
+    if (!showModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModal]);
 
   return (
     <>

@@ -55,7 +55,7 @@ export function useWishlist() {
           user_id,
           product_id,
           created_at,
-          product:products (*)
+          product:products (*, product_images(*))
         `)
         .eq('user_id', user.id);
         
@@ -79,7 +79,7 @@ export function useWishlist() {
         // Re-fetch synced DB items
         const { data: synced } = await supabase
           .from('wishlist' as any)
-          .select(`id, user_id, product_id, created_at, product:products (*)`)
+          .select(`id, user_id, product_id, created_at, product:products (*, product_images(*))`)
           .eq('user_id', user.id);
         setItems((synced as WishlistItem[]) || []);
       } else {

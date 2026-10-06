@@ -109,14 +109,12 @@ export function useAuth() {
       // Automatically sign in to establish active auth session
       await supabase.auth.signInWithPassword({ email, password });
 
-      // 1. Create / Update Profile record
-      await supabase.from('profiles' as any).upsert({
-        id: newUserId,
-        email,
-        full_name: fullName,
-        phone: phone || '',
-        role: 'user'
-      });
+      // 1. Profil satırını veritabanı tetikleyicisi oluşturur; burada sadece güncellenir.
+      // (upsert, profiles tablosunda INSERT izni olmadığı için sessizce başarısız oluyordu ve telefon kaydedilmiyordu)
+      await supabase
+        .from('profiles' as any)
+        .update({ full_name: fullName, phone: phone || null })
+        .eq('id', newUserId);
 
       // 2. Save Registration Address
       if (addressInfo) {
