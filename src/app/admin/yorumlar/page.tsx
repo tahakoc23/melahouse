@@ -1,116 +1,214 @@
-// @ts-nocheck
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { Check, X, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
+import { Check, EyeOff, MessageSquare, Star, Trash2 } from 'lucide-react'
+import { Badge, Button, Card, EmptyState, Notice, PageHeader, Tabs } from '@/components/admin/ui'
+import { ConfirmDialog } from '@/components/admin/ui/AdminDialog'
+import { createAdminBrowserClient, errorMessage, formatDate, refreshAdminCounts } from '@/components/admin/ui/orderHelpers'
 
-export default function ReviewsPage() {
-  const supabase = createClient()
-  const [reviews, setReviews] = useState<any[]>([])
+type Review = {
+  id: string
+  product_id: string
+  rating: number
+  comment: string | null
+  is_approved: boolean
+  created_at: string | null
+  products: { name: string | null; slug: string | null } | null
+  profiles: { full_name: string | null; email: string | null } | null
+}
+
+type TabKey = 'bekleyen' | 'yayinda'
+
+export default function AdminReviewsPage() {
+  const supabase = useMemo(() => createAdminBrowserClient(), [])
+  const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
+  const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<TabKey>('bekleyen')
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Review | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => {
-    fetchReviews()
-  }, [])
-
-  const fetchReviews = async () => {
-    setLoading(true)
-    const { data } = await supabase
+  const load = useCallback(async () => {
+    const { data, error: err } = await supabase
       .from('reviews')
-      .select('*, products(name), profiles(full_name)')
+      .select('id, product_id, rating, comment, is_approved, created_at, products(name, slug), profiles(full_name, email)')
       .order('created_at', { ascending: false })
-    setReviews(data || [])
-    setLoading(false)
-  }
-
-  const handleUpdateStatus = async (id: string, isApproved: boolean) => {
-    const { error } = await supabase.from('reviews' as any).update({ is_approved: isApproved }).eq('id', id)
-    if (error) alert('Hata: ' + error.message)
+    if (err) setError(errorMessage(err, 'Yorumlar yüklenemedi.'))
     else {
-      setReviews(reviews.map(r => r.id === id ? { ...r, is_approved: isApproved } : r))
+      setReviews((data || []) as unknown as Review[])
+      setError(null)
     }
+    setLoading(false)
+  }, [supabase])
+
+  // İlk yükleme: load() içindeki setState çağrıları istek tamamlandıktan sonra çalışır
+  useEffect(() => {
+    const run = () => {
+      load().catch(() => {})
+    }
+    run()
+  }, [load])
+
+  const setApproved = async (r: Review, approved: boolean) => {
+    setBusyId(r.id)
+    const { data, error: err } = await supabase.from('reviews').update({ is_approved: approved }).eq('id', r.id).select('id')
+    setBusyId(null)
+    if (err || !data || data.length === 0) {
+      toast.error(errorMessage(err, 'Yorum güncellenemedi. Sayfayı yenileyip tekrar deneyin.'))
+      return
+    }
+    setReviews(prev => prev.map(x => (x.id === r.id ? { ...x, is_approved: approved } : x)))
+    toast.success(approved ? 'Yorum yayınlandı.' : 'Yorum yayından kaldırıldı. Onay bekleyenler listesine taşındı.')
+    refreshAdminCounts()
   }
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Yorumu silmek istediğinize emin misiniz?')) {
-      const { error } = await supabase.from('reviews').delete().eq('id', id)
-      if (error) alert('Hata: ' + error.message)
-      else setReviews(reviews.filter(r => r.id !== id))
+  const remove = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    const { data, error: err } = await supabase.from('reviews').delete().eq('id', deleteTarget.id).select('id')
+    setDeleting(false)
+    if (err || !data || data.length === 0) {
+      toast.error(errorMessage(err, 'Yorum silinemedi. Sayfayı yenileyip tekrar deneyin.'))
+      return
     }
+    setReviews(prev => prev.filter(x => x.id !== deleteTarget.id))
+    setDeleteTarget(null)
+    toast.success('Yorum silindi.')
+    refreshAdminCounts()
   }
 
-  const filteredReviews = reviews.filter(r => {
-    if (filter === 'pending') return r.is_approved === false
-    if (filter === 'approved') return r.is_approved === true
-    return true
-  })
+  const pending = reviews.filter(r => !r.is_approved)
+  const live = reviews.filter(r => r.is_approved)
+  const list = tab === 'bekleyen' ? pending : live
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold font-playfair text-[#1A1A1A]">Yorum Yönetimi</h1>
-        <select 
-          value={filter} 
-          onChange={(e) => setFilter(e.target.value)}
-          className="border p-2 rounded-md bg-white text-sm"
-        >
-          <option value="all">Tümü</option>
-          <option value="pending">Onay Bekleyenler</option>
-          <option value="approved">Onaylananlar</option>
-        </select>
-      </div>
+    <div>
+      <PageHeader title="Yorumlar" description="Onayladığınız yorumlar ürün sayfasında görünür." />
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs text-gray-500 uppercase bg-gray-50">
-            <tr>
-              <th className="px-4 py-3">Ürün</th>
-              <th className="px-4 py-3">Müşteri</th>
-              <th className="px-4 py-3">Puan</th>
-              <th className="px-4 py-3">Yorum</th>
-              <th className="px-4 py-3">Durum</th>
-              <th className="px-4 py-3 text-right">İşlemler</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Yükleniyor...</td></tr>
-            ) : filteredReviews.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Yorum bulunamadı.</td></tr>
-            ) : (
-              filteredReviews.map((review) => (
-                <tr key={review.id} className="border-b hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-[#1A1A1A] max-w-[150px] truncate">{review.products?.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{review.profiles?.full_name || 'Anonim'}</td>
-                  <td className="px-4 py-3 text-[#C5A572]">{'★'.repeat(review.rating)}{'☆'.repeat(5-review.rating)}</td>
-                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{review.comment}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded text-xs ${review.is_approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                      {review.is_approved ? 'Onaylı' : 'Bekliyor'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    {!review.is_approved ? (
-                      <button onClick={() => handleUpdateStatus(review.id, true)} className="inline-flex p-1 text-green-600 hover:bg-green-50 rounded" title="Onayla">
-                        <Check size={18} />
-                      </button>
-                    ) : (
-                      <button onClick={() => handleUpdateStatus(review.id, false)} className="inline-flex p-1 text-yellow-600 hover:bg-yellow-50 rounded" title="Onayı Kaldır">
-                        <X size={18} />
-                      </button>
-                    )}
-                    <button onClick={() => handleDelete(review.id)} className="inline-flex p-1 text-red-600 hover:bg-red-50 rounded" title="Sil">
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Tabs
+        tabs={[
+          { value: 'bekleyen' as TabKey, label: 'Onay bekleyen', count: pending.length },
+          { value: 'yayinda' as TabKey, label: 'Yayında', count: live.length },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {error && (
+        <div className="mb-4">
+          <Notice tone="danger" title="Yorumlar yüklenemedi">
+            <p>{error}</p>
+            <button
+              type="button"
+              className="mt-1 font-medium underline"
+              onClick={() => {
+                setLoading(true)
+                load()
+              }}
+            >
+              Tekrar dene
+            </button>
+          </Notice>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-3" aria-busy="true" aria-label="Yorumlar yükleniyor">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="h-32 animate-pulse rounded-lg border border-[#E7E3DE] bg-white" />
+          ))}
+        </div>
+      ) : list.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<MessageSquare className="h-5 w-5" />}
+            title={tab === 'bekleyen' ? 'Onay bekleyen yorum yok' : 'Yayında yorum yok'}
+            description={
+              tab === 'bekleyen'
+                ? 'Müşteriler yeni yorum yazdığında onayınız için burada görünür.'
+                : 'Onay bekleyen sekmesinden yorumları onaylayarak yayına alabilirsiniz.'
+            }
+          />
+        </Card>
+      ) : (
+        <ul className="space-y-3">
+          {list.map(r => (
+            <li key={r.id} className="rounded-lg border border-[#E7E3DE] bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {r.products?.slug ? (
+                    <a
+                      href={`/urunler/${r.products.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-ink hover:underline"
+                    >
+                      {r.products.name || 'Ürün'}
+                    </a>
+                  ) : (
+                    <p className="font-medium">{r.products?.name || 'Silinmiş ürün'}</p>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-kul">
+                    <Stars rating={r.rating} />
+                    <span>{r.profiles?.full_name || r.profiles?.email || 'İsimsiz müşteri'}</span>
+                    <span>{formatDate(r.created_at)}</span>
+                  </div>
+                </div>
+                {r.is_approved ? <Badge tone="success">Yayında</Badge> : <Badge tone="warning">Onay bekliyor</Badge>}
+              </div>
+
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink">
+                {r.comment?.trim() || <span className="text-kul">Yorum metni yok, yalnızca puan verilmiş.</span>}
+              </p>
+
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" size="sm" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDeleteTarget(r)}>
+                  Sil
+                </Button>
+                {r.is_approved ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<EyeOff className="h-4 w-4" />}
+                    loading={busyId === r.id}
+                    onClick={() => setApproved(r, false)}
+                  >
+                    Yayından kaldır
+                  </Button>
+                ) : (
+                  <Button size="sm" icon={<Check className="h-4 w-4" />} loading={busyId === r.id} onClick={() => setApproved(r, true)}>
+                    Onayla
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={remove}
+        loading={deleting}
+        tone="danger"
+        title="Yorumu sil"
+        message="Yorum kalıcı olarak silinir ve geri alınamaz. Sadece gizlemek istiyorsanız yayından kaldırın."
+        confirmLabel="Yorumu sil"
+      />
     </div>
+  )
+}
+
+function Stars({ rating }: { rating: number }) {
+  const r = Math.max(0, Math.min(5, Math.round(rating)))
+  return (
+    <span className="inline-flex items-center gap-0.5" role="img" aria-label={`5 üzerinden ${r} puan`}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star key={i} className={`h-4 w-4 ${i < r ? 'fill-murdum text-murdum' : 'text-[#DCD6CF]'}`} aria-hidden="true" />
+      ))}
+    </span>
   )
 }

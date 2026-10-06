@@ -1,523 +1,511 @@
-// @ts-nocheck
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { formatPrice } from '@/lib/utils'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { CreditCard, TrendingUp, Calendar, ShoppingBag, RefreshCw, AlertTriangle, Eye, Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  AlertTriangle,
+  Building2,
+  Check,
+  ChevronRight,
+  Clock,
+  MessageSquare,
+  PackageOpen,
+  RotateCcw,
+  ShoppingBag,
+  TrendingUp,
+  Users,
+  Wallet,
+} from 'lucide-react'
+import { Badge, Button, Card, EmptyState, Notice, PageHeader, Stat, Table, Td, Th } from '@/components/admin/ui'
+import {
+  NON_REVENUE_STATUSES,
+  createAdminBrowserClient,
+  customerNameOf,
+  formatDate,
+  orderNo,
+  statusMeta,
+} from '@/components/admin/ui/orderHelpers'
+import { formatTL } from '@/lib/utils'
 
-const MONTH_NAMES = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-const BASELINE_START_YEAR = 2026;
+const LOW_STOCK_LIMIT = 2
+const MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara']
+
+type RevenueOrder = { id: string; status: string | null; total: number | null; created_at: string }
+type RecentOrder = {
+  id: string
+  order_number: string | null
+  status: string | null
+  total: number | null
+  created_at: string | null
+  shipping_address: unknown
+  profiles: { full_name: string | null } | null
+}
+type LowStock = {
+  id: string
+  product_id: string
+  color_name: string | null
+  size: string | null
+  stock_quantity: number
+  products: { name: string | null } | null
+}
+type VisitorStats = { today: number; week: number; month: number; year: number }
+
+type Dashboard = {
+  revenueOrders: RevenueOrder[]
+  recent: RecentOrder[]
+  lowStock: LowStock[]
+  counts: { newOrders: number; preparing: number; returns: number; reviews: number; supplierChanges: number; customers: number }
+  visitors: VisitorStats | null
+  partialError: boolean
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
 
 export default function AdminDashboard() {
-  const supabase = createClient()
-  const [loading, setLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState<number>(() => Math.max(new Date().getFullYear(), BASELINE_START_YEAR))
-  const [availableYears, setAvailableYears] = useState<number[]>([2026])
-  
-  const [rawOrders, setRawOrders] = useState<any[]>([])
-  const [visitorFilter, setVisitorFilter] = useState<'today' | 'week' | 'month' | 'year'>('today')
-  const [visitorStats, setVisitorStats] = useState({ today: 1, week: 1, month: 1, year: 1 })
+  const supabase = useMemo(() => createAdminBrowserClient(), [])
+  const [data, setData] = useState<Dashboard | null>(null)
+  const [fatal, setFatal] = useState<string | null>(null)
+  const [range, setRange] = useState<'30d' | '12m'>('30d')
 
-  const [stats, setStats] = useState({
-    todayRevenue: 0,
-    weekRevenue: 0,
-    monthRevenue: 0,
-    yearRevenue: 0,
-    totalOrders: 0,
-    yearOrdersCount: 0,
-    returnedCount: 0,
-    returnedTotal: 0,
-    totalUsersCount: 0
-  })
-  
-  const [dailyChartData, setDailyChartData] = useState<any[]>([])
-  const [monthlyChartData, setMonthlyChartData] = useState<any[]>([])
-  const [chartTab, setChartTab] = useState<'30days' | 'monthly'>('30days')
-  
-  const [topProducts, setTopProducts] = useState<any[]>([])
-  const [recentOrders, setRecentOrders] = useState<any[]>([])
-  const [lowStockProducts, setLowStockProducts] = useState<any[]>([])
-
-  useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        // 1. Fetch Registered Users Count via /api/admin/users API route
-        let userCount = 0;
-        try {
-          const uRes = await fetch('/api/admin/users', { cache: 'no-store' });
-          const uData = await uRes.json();
-          if (uData.users && Array.isArray(uData.users)) {
-            userCount = uData.users.length;
-          }
-        } catch (uErr) {
-          console.error("Fetch users error:", uErr);
-        }
-
-        // 2. Fetch Unique Visitor Statistics (Bugün, Bu Hafta, Bu Ay, Seçili Yıl) via RPC
-        try {
-          const { data: vData } = await supabase.rpc('get_visitor_stats', { target_year: selectedYear });
-          if (vData) {
-            setVisitorStats(vData);
-          }
-        } catch (vErr) {
-          console.error("Fetch visitor stats error:", vErr);
-        }
-
-        // 3. Fetch low stock product variants
-        const { data: variants } = await supabase
-          .from('product_variants' as any)
-          .select('id, stock_quantity, color_name, size, product_id, products(name)')
-          .lte('stock_quantity', 3)
-          .order('stock_quantity', { ascending: true })
-          .limit(10)
-        
-        setLowStockProducts(variants || [])
-
-        // 4. Fetch all orders for exact revenue & refund calculations
-        const { data: allOrders } = await supabase
-          .from('orders' as any)
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        const ordersList = allOrders || []
-        setRawOrders(ordersList)
-        setRecentOrders(ordersList.slice(0, 10))
-
-        // Dynamically compute available years starting from 2026 onwards
-        const currentRealYear = new Date().getFullYear();
-        const maxYear = Math.max(currentRealYear, BASELINE_START_YEAR);
-        
-        const yearsSet = new Set<number>();
-        for (let y = maxYear; y >= BASELINE_START_YEAR; y--) {
-          yearsSet.add(y);
-        }
-
-        ordersList.forEach(o => {
-          if (o.created_at) {
-            const yr = new Date(o.created_at).getFullYear();
-            if (yr >= BASELINE_START_YEAR) yearsSet.add(yr);
-          }
-        });
-
-        const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
-        setAvailableYears(sortedYears);
-
-        // Top products
-        const { data: products } = await supabase
-          .from('products' as any)
-          .select('id, name, base_price, is_active')
-          .limit(10)
-        
-        setTopProducts(products || [])
-
-        setStats(prev => ({
-          ...prev,
-          totalUsersCount: userCount || 3
-        }));
-
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchDashboardData()
-  }, [supabase, selectedYear])
-
-  // Recalculate financial stats & charts whenever rawOrders or selectedYear changes
-  useEffect(() => {
-    if (rawOrders.length === 0 && !loading) return;
-
-    // Filter valid vs returned orders
-    const validOrders = rawOrders.filter(o => !['iptal_edildi', 'iade_edildi', 'iade_talebi'].includes(o.status))
-    const returnedOrders = rawOrders.filter(o => ['iade_edildi', 'iade_talebi'].includes(o.status))
-
+  const load = useCallback(async () => {
     const now = new Date()
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).getTime()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+    // Grafiğin 12 aylık görünümü için 11 ay öncesinin başından itibaren yeterli
+    const since = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString()
+    const head = { count: 'exact' as const, head: true }
 
-    const yearStart = new Date(selectedYear, 0, 1).getTime()
-    const yearEnd = new Date(selectedYear + 1, 0, 1).getTime()
+    const [rev, recent, low, newO, prep, ret, rvw, sup, cust, vis] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('id, status, total, created_at')
+        .gte('created_at', since)
+        .not('status', 'in', `(${NON_REVENUE_STATUSES.join(',')})`),
+      supabase
+        .from('orders')
+        .select('id, order_number, status, total, created_at, shipping_address, profiles(full_name)')
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase
+        .from('product_variants')
+        .select('id, product_id, color_name, size, stock_quantity, products!inner(name, is_active)')
+        .eq('is_active', true)
+        .eq('products.is_active', true)
+        .lte('stock_quantity', LOW_STOCK_LIMIT)
+        .order('stock_quantity', { ascending: true })
+        .limit(200),
+      supabase.from('orders').select('id', head).in('status', ['siparis_alindi', 'odeme_alindi']),
+      supabase.from('orders').select('id', head).eq('status', 'hazirlaniyor'),
+      supabase.from('orders').select('id', head).eq('status', 'iade_talebi'),
+      supabase.from('reviews').select('id', head).eq('is_approved', false),
+      supabase.from('supplier_changes').select('id', head).eq('is_read', false),
+      supabase.from('profiles').select('id', head).neq('role', 'admin'),
+      supabase.rpc('get_visitor_stats', { target_year: now.getFullYear() }),
+    ])
 
-    // Revenues
-    const todayRevenue = validOrders
-      .filter(o => new Date(o.created_at).getTime() >= todayStart)
-      .reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-    const weekRevenue = validOrders
-      .filter(o => new Date(o.created_at).getTime() >= weekStart)
-      .reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-    const monthRevenue = validOrders
-      .filter(o => new Date(o.created_at).getTime() >= monthStart)
-      .reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-    const yearRevenue = validOrders
-      .filter(o => {
-        const t = new Date(o.created_at).getTime()
-        return t >= yearStart && t < yearEnd
-      })
-      .reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-    const yearOrders = rawOrders.filter(o => {
-      const t = new Date(o.created_at).getTime()
-      return t >= yearStart && t < yearEnd
-    })
-
-    const returnedCount = returnedOrders.length
-    const returnedTotal = returnedOrders.reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-    setStats(prev => ({
-      ...prev,
-      todayRevenue,
-      weekRevenue,
-      monthRevenue,
-      yearRevenue,
-      totalOrders: rawOrders.length,
-      yearOrdersCount: yearOrders.length,
-      returnedCount,
-      returnedTotal
-    }))
-
-    // Build 30-day Daily Revenue Chart
-    const dailyChart: { name: string; ciro: number }[] = []
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
-      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-      const dayEnd = dayStart + 24 * 60 * 60 * 1000
-
-      const dayTotal = validOrders
-        .filter(o => {
-          const t = new Date(o.created_at).getTime()
-          return t >= dayStart && t < dayEnd
-        })
-        .reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-      const dayName = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
-      dailyChart.push({ name: dayName, ciro: dayTotal })
+    if (rev.error && recent.error) {
+      setFatal('Veriler yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.')
+      return
     }
-    setDailyChartData(dailyChart)
 
-    // Build 12-Month Monthly Revenue Chart for the Selected Year
-    const monthlyChart = MONTH_NAMES.map((mName, mIdx) => {
-      const mStart = new Date(selectedYear, mIdx, 1).getTime()
-      const mEnd = new Date(selectedYear, mIdx + 1, 1).getTime()
+    const partialError = [rev, recent, low, newO, prep, ret, rvw, cust].some(r => r.error)
 
-      const mTotal = validOrders
-        .filter(o => {
-          const t = new Date(o.created_at).getTime()
-          return t >= mStart && t < mEnd
-        })
-        .reduce((sum, o) => sum + Number(o.total ?? o.total_amount ?? 0), 0)
-
-      return { name: mName, ciro: mTotal }
+    setData({
+      revenueOrders: (rev.data || []) as RevenueOrder[],
+      recent: (recent.data || []) as unknown as RecentOrder[],
+      lowStock: (low.data || []) as unknown as LowStock[],
+      counts: {
+        newOrders: newO.count ?? 0,
+        preparing: prep.count ?? 0,
+        returns: ret.count ?? 0,
+        reviews: rvw.count ?? 0,
+        supplierChanges: sup.error ? 0 : sup.count ?? 0,
+        customers: cust.count ?? 0,
+      },
+      visitors: vis.error || !vis.data ? null : (vis.data as VisitorStats),
+      partialError,
     })
-    setMonthlyChartData(monthlyChart)
+    setFatal(null)
+  }, [supabase])
 
-  }, [rawOrders, selectedYear, loading])
+  // İlk yükleme: load() içindeki setState çağrıları istek tamamlandıktan sonra çalışır
+  useEffect(() => {
+    const run = () => {
+      load().catch(() => {})
+    }
+    run()
+  }, [load])
 
-  if (loading) {
+  const view = useMemo(() => {
+    if (!data) return null
+    const now = new Date()
+    const today = startOfDay(now).getTime()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+    const orders = data.revenueOrders.map(o => ({ t: new Date(o.created_at).getTime(), total: Number(o.total) || 0 }))
+
+    const sum = (from: number, to = Infinity) => orders.filter(o => o.t >= from && o.t < to)
+    const todayOrders = sum(today)
+    const monthOrders = sum(monthStart)
+
+    const daily = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - i))
+      const start = d.getTime()
+      const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime()
+      return {
+        label: d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }),
+        ciro: sum(start, end).reduce((s, o) => s + o.total, 0),
+      }
+    })
+    const monthly = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1)
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime()
+      return {
+        label: `${MONTHS[d.getMonth()]}${d.getMonth() === 0 || i === 0 ? ` ${String(d.getFullYear()).slice(2)}` : ''}`,
+        ciro: sum(d.getTime(), end).reduce((s, o) => s + o.total, 0),
+      }
+    })
+
+    return {
+      todayRevenue: todayOrders.reduce((s, o) => s + o.total, 0),
+      todayCount: todayOrders.length,
+      monthRevenue: monthOrders.reduce((s, o) => s + o.total, 0),
+      monthCount: monthOrders.length,
+      daily,
+      monthly,
+      year: now.getFullYear(),
+    }
+  }, [data])
+
+  if (fatal) {
     return (
-      <div className="p-12 text-center text-gray-500 font-inter text-xs">
-        <RefreshCw className="w-6 h-6 animate-spin text-[#C5A572] mx-auto mb-2" />
-        <p>Genel Bakış verileri yükleniyor...</p>
+      <div>
+        <PageHeader title="Genel bakış" />
+        <Notice tone="danger" title="Genel bakış yüklenemedi">
+          {fatal}
+        </Notice>
       </div>
     )
   }
 
+  if (!data || !view) return <DashboardSkeleton />
+
+  const { counts } = data
+  const toPrepare = counts.newOrders + counts.preparing
+  const outOfStock = data.lowStock.filter(v => v.stock_quantity <= 0).length
+  const chartData = range === '30d' ? view.daily : view.monthly
+  const chartTotal = chartData.reduce((s, d) => s + d.ciro, 0)
+
+  const todos: TodoItem[] = [
+    {
+      icon: <ShoppingBag className="h-5 w-5" />,
+      count: toPrepare,
+      title: 'Hazırlanacak sipariş',
+      detail: toPrepare ? `${counts.newOrders} yeni · ${counts.preparing} hazırlanıyor` : 'Bekleyen sipariş yok',
+      href: counts.newOrders > 0 ? '/admin/siparisler?durum=yeni' : '/admin/siparisler?durum=hazirlaniyor',
+    },
+    {
+      icon: <RotateCcw className="h-5 w-5" />,
+      count: counts.returns,
+      title: 'İade talebi',
+      detail: counts.returns ? 'Onaylayın veya reddedin' : 'Bekleyen iade yok',
+      href: '/admin/iadeler',
+    },
+    {
+      icon: <MessageSquare className="h-5 w-5" />,
+      count: counts.reviews,
+      title: 'Onay bekleyen yorum',
+      detail: counts.reviews ? 'Yayınlamadan önce okuyun' : 'Bekleyen yorum yok',
+      href: '/admin/yorumlar',
+    },
+    {
+      icon: <PackageOpen className="h-5 w-5" />,
+      count: data.lowStock.length,
+      title: 'Stoğu azalan ürün',
+      detail: data.lowStock.length
+        ? `${LOW_STOCK_LIMIT} adet veya daha az${outOfStock ? ` · ${outOfStock} tükendi` : ''}`
+        : 'Stok sorunu yok',
+      href: '#az-kalan-stok',
+    },
+    {
+      icon: <Building2 className="h-5 w-5" />,
+      count: counts.supplierChanges,
+      title: 'Toptancı fiyat/stok değişikliği',
+      detail: counts.supplierChanges ? 'Fiyatlarınızı kontrol edin' : 'Yeni değişiklik yok',
+      href: '/admin/toptancilar',
+    },
+  ]
+  const openTodos = todos.filter(t => t.count > 0).length
+
   return (
-    <div className="space-y-6 font-inter text-xs">
-      {/* Header & Year Selector Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold font-playfair text-[#1A1A1A]">Genel Bakış</h1>
-          <p className="text-gray-500 text-[11px] mt-0.5">Mağazanızın canlı satış, net ciro, yıllık raporlar ve tekil ziyaretçi trafiğini takip edin.</p>
-        </div>
+    <div className="space-y-8">
+      <PageHeader title="Genel bakış" description={new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })} />
 
-        {/* Dynamic Year Selector Dropdown (Starting from 2026 onwards) */}
-        <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-xs border border-gray-200 shadow-2xs font-medium text-xs">
-          <Calendar size={15} className="text-[#C5A572]" />
-          <span className="font-bold text-[#1A1A1A]">Hesaplama Yılı:</span>
-          <select 
-            value={selectedYear} 
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="bg-gray-50 border border-gray-300 text-[#1A1A1A] font-bold py-1 px-3 rounded-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#C5A572] text-xs"
-          >
-            {availableYears.map(y => (
-              <option key={y} value={y}>{y} Yılı</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      
-      {/* Financial Overview Cards including Selected Year Net Revenue */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Bugünün Net Cirosu" value={formatPrice(stats.todayRevenue)} icon={CreditCard} subtitle="İadeler düşülmüştür" />
-        <StatCard title="Bu Haftanın Net Cirosu" value={formatPrice(stats.weekRevenue)} icon={TrendingUp} subtitle="Son 7 gün net" />
-        <StatCard title="Bu Ayın Net Cirosu" value={formatPrice(stats.monthRevenue)} icon={Calendar} subtitle="Bu ay net" />
-        <StatCard 
-          title={`${selectedYear} Yılı Net Cirosu`} 
-          value={formatPrice(stats.yearRevenue)} 
-          icon={Calendar} 
-          subtitle={`${selectedYear} yılı toplam net`}
-          isYearlyHighlight={true}
-        />
-      </div>
+      {data.partialError && (
+        <Notice tone="warning">Bazı veriler yüklenemedi; sayılar eksik olabilir. Sayfayı yenileyip tekrar deneyin.</Notice>
+      )}
 
-      {/* Traffic, Users & Return Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <StatCard title="Toplam Sipariş" value={`${stats.totalOrders} Sipariş`} icon={ShoppingBag} subtitle="Tüm zamanlar" />
-        
-        <Link href="/admin/kullanicilar">
-          <StatCard 
-            title="Kayıtlı Kullanıcılar" 
-            value={`${stats.totalUsersCount} Kullanıcı`} 
-            icon={Users} 
-            subtitle="Tüm kayıtlı üyeler"
-            isHighlight={true}
-          />
+      {/* Bugün yapılacaklar */}
+      <Card
+        title="Bugün yapılacaklar"
+        description={openTodos ? `${openTodos} konu ilginizi bekliyor` : 'Her şey yolunda, bekleyen iş yok.'}
+        padded={false}
+      >
+        <ul className="divide-y divide-[#F3F0EC]">
+          {todos.map(t => (
+            <li key={t.title}>
+              <TodoRow item={t} />
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      {/* Göstergeler */}
+      <section aria-label="Özet" className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <Stat label="Bugünkü ciro" value={formatTL(view.todayRevenue)} hint={`${view.todayCount} sipariş`} icon={<Wallet className="h-4 w-4" />} />
+        <Stat label="Bu ay ciro" value={formatTL(view.monthRevenue)} hint={`${view.monthCount} sipariş`} icon={<TrendingUp className="h-4 w-4" />} />
+        <Link
+          href="/admin/siparisler?durum=yeni"
+          className="rounded-lg transition-shadow hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          <Stat label="Bekleyen sipariş" value={toPrepare} hint="Hazırlanıp kargoya verilecek" icon={<Clock className="h-4 w-4" />} />
         </Link>
+        <Link
+          href="/admin/kullanicilar"
+          className="rounded-lg transition-shadow hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          <Stat label="Toplam müşteri" value={counts.customers} hint="Kayıtlı üye" icon={<Users className="h-4 w-4" />} />
+        </Link>
+      </section>
 
-        {/* Unique Visitor Stat Card with Time Filter Options (Gün, Hafta, Ay, Yıl) */}
-        <div className="bg-white p-4 rounded-xs border border-gray-200 shadow-xs flex flex-col justify-between space-y-2">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2 text-gray-500">
-              <div className="p-2 rounded-full bg-gray-50 text-[#C5A572] border border-gray-100">
-                <Eye size={18} />
-              </div>
-              <span className="text-[11px] font-medium text-gray-700">Tekil Ziyaretçiler</span>
-            </div>
-
-            <select
-              value={visitorFilter}
-              onChange={(e) => setVisitorFilter(e.target.value as any)}
-              className="bg-gray-50 border border-gray-300 text-[#1A1A1A] font-bold text-[10px] py-1 px-2 rounded-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#C5A572]"
-            >
-              <option value="today">Bugün</option>
-              <option value="week">Bu Hafta</option>
-              <option value="month">Bu Ay</option>
-              <option value="year">{selectedYear} Yılı</option>
-            </select>
-          </div>
-
-          <div>
-            <p className="text-base font-bold text-[#1A1A1A] mt-1">
-              {visitorFilter === 'today' && `${visitorStats.today || 1} Tekil Ziyaretçi`}
-              {visitorFilter === 'week' && `${visitorStats.week || 1} Tekil Ziyaretçi`}
-              {visitorFilter === 'month' && `${visitorStats.month || 1} Tekil Ziyaretçi`}
-              {visitorFilter === 'year' && `${visitorStats.year || 1} Tekil Ziyaretçi`}
-            </p>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-              {visitorFilter === 'today' && 'Bugün giren farklı kişi sayısı'}
-              {visitorFilter === 'week' && 'Son 7 günde giren farklı kişi'}
-              {visitorFilter === 'month' && 'Bu ay giren farklı kişi sayısı'}
-              {visitorFilter === 'year' && `${selectedYear} yılında giren farklı kişi`}
-            </p>
-          </div>
-        </div>
-
-        <StatCard 
-          title="İade Edilen Siparişler" 
-          value={`${stats.returnedCount} İade`} 
-          icon={RefreshCw} 
-          subtitle={`Tutarı: ${formatPrice(stats.returnedTotal)}`}
-        />
-      </div>
-
-      {/* Main Revenue Chart & Low Stock Warnings */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-xs shadow-xs border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-2 border-b border-gray-100">
-            <div>
-              <h2 className="text-base font-bold text-[#1A1A1A] font-playfair">
-                {chartTab === '30days' ? 'Son 30 Günlük Net Ciro Grafiği' : `${selectedYear} Yılı 12 Aylık Net Ciro Grafiği`}
-              </h2>
-              <p className="text-gray-400 text-[11px]">İade edilen ürün ücretleri grafik verilerine yansıtılmaz.</p>
-            </div>
-
-            {/* Chart View Mode Switcher */}
-            <div className="flex gap-1.5 bg-gray-100 p-1 rounded-xs">
+      {/* Ciro grafiği */}
+      <Card
+        title="Ciro"
+        description="İptal, iade ve ödemesi tamamlanmamış kart siparişleri dahil değil."
+        actions={
+          <div role="group" aria-label="Zaman aralığı" className="flex rounded-md border border-[#DCD6CF] p-0.5">
+            {(
+              [
+                ['30d', 'Son 30 gün'],
+                ['12m', 'Aylık'],
+              ] as const
+            ).map(([v, l]) => (
               <button
-                onClick={() => setChartTab('30days')}
-                className={`px-3 py-1 text-[11px] font-semibold rounded-xs transition-colors cursor-pointer ${
-                  chartTab === '30days' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'
+                key={v}
+                type="button"
+                aria-pressed={range === v}
+                onClick={() => setRange(v)}
+                className={`h-8 rounded px-3 text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+                  range === v ? 'bg-ink text-white' : 'text-kul hover:text-ink'
                 }`}
               >
-                Son 30 Gün
+                {l}
               </button>
-              <button
-                onClick={() => setChartTab('monthly')}
-                className={`px-3 py-1 text-[11px] font-semibold rounded-xs transition-colors cursor-pointer ${
-                  chartTab === 'monthly' ? 'bg-[#C5A572] text-white' : 'text-gray-600 hover:text-[#1A1A1A]'
-                }`}
-              >
-                {selectedYear} Aylık Dağılım
-              </button>
-            </div>
+            ))}
           </div>
-          
-          <div className="h-80 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              {chartTab === '30days' ? (
-                <LineChart data={dailyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F0" />
-                  <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `₺${val}`} />
-                  <Tooltip 
-                    formatter={(val: number) => [`${formatPrice(val)}`, 'Net Ciro']}
-                    contentStyle={{ backgroundColor: '#1A1A1A', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
-                    itemStyle={{ color: '#C5A572' }}
-                  />
-                  <Line type="monotone" dataKey="ciro" stroke="#C5A572" strokeWidth={2.5} dot={{ fill: '#C5A572', r: 3 }} activeDot={{ r: 6 }} />
-                </LineChart>
-              ) : (
-                <BarChart data={monthlyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F0" />
-                  <XAxis dataKey="name" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `₺${val}`} />
-                  <Tooltip 
-                    formatter={(val: number) => [`${formatPrice(val)}`, `${selectedYear} Net Ciro`]}
-                    contentStyle={{ backgroundColor: '#1A1A1A', borderRadius: '4px', color: '#fff', fontSize: '11px' }}
-                    itemStyle={{ color: '#C5A572' }}
-                  />
-                  <Bar dataKey="ciro" fill="#C5A572" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              )}
-            </ResponsiveContainer>
-          </div>
+        }
+      >
+        <p className="mb-4 text-[13px] text-kul">
+          {range === '30d' ? 'Son 30 günde' : 'Son 12 ayda'} toplam{' '}
+          <span className="font-semibold text-ink tabular-nums">{formatTL(chartTotal)}</span>
+        </p>
+        <div className="h-72 w-full" role="img" aria-label={`${range === '30d' ? 'Son 30 gün günlük' : 'Son 12 ay aylık'} ciro grafiği`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap={range === '30d' ? 2 : 8}>
+              <CartesianGrid vertical={false} stroke="#EFEBE6" />
+              <XAxis
+                dataKey="label"
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 12, fill: '#77706B' }}
+                interval={range === '30d' ? 4 : 0}
+                minTickGap={8}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={56}
+                tick={{ fontSize: 12, fill: '#77706B' }}
+                tickFormatter={v => new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(v))}
+              />
+              <Tooltip
+                cursor={{ fill: '#F1EEEA' }}
+                formatter={v => [formatTL(Number(v)), 'Ciro']}
+                contentStyle={{ borderRadius: 8, border: '1px solid #E7E3DE', fontSize: 13, color: '#171214' }}
+                labelStyle={{ color: '#77706B', marginBottom: 2 }}
+              />
+              <Bar dataKey="ciro" fill="#3A1D2A" radius={[4, 4, 0, 0]} maxBarSize={36} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
+      </Card>
 
-        <div className="bg-white p-6 rounded-xs shadow-xs border border-gray-200">
-          <div className="flex items-center space-x-2 mb-4 text-rose-700 border-b pb-3 border-gray-100">
-            <AlertTriangle size={18} />
-            <h2 className="text-base font-bold font-playfair text-[#1A1A1A]">Düşük Stok Uyarıları</h2>
-          </div>
-          <div className="space-y-3">
-            {lowStockProducts.length === 0 ? (
-              <p className="text-xs text-gray-500 italic py-6 text-center">Düşük stoklu ürün bulunmuyor.</p>
-            ) : (
-              lowStockProducts.map((item) => (
-                <div key={item.id} className="flex justify-between items-center text-xs border-b pb-2.5 last:border-0 border-gray-100">
-                  <div>
-                    <p className="font-semibold text-[#1A1A1A]">{item.products?.name}</p>
-                    <p className="text-gray-500 text-[10px] mt-0.5">{item.color_name} - Beden: {item.size}</p>
-                  </div>
-                  <span className="bg-rose-100 text-rose-900 px-2 py-0.5 rounded-xs font-bold text-[10px]">
-                    {item.stock_quantity} Adet
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Orders & Top Selling Products */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xs shadow-xs border border-gray-200 overflow-hidden">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
-            <h2 className="text-base font-bold font-playfair text-[#1A1A1A]">Son Siparişler</h2>
-            <Link href="/admin/siparisler" className="text-[#C5A572] hover:underline font-semibold text-xs flex items-center gap-1">
-              Tümünü Gör →
-            </Link>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="text-[10px] text-gray-400 uppercase bg-gray-50 font-semibold tracking-wider">
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Son siparişler */}
+        <Card
+          title="Son siparişler"
+          className="lg:col-span-2"
+          padded={false}
+          actions={
+            <Button variant="ghost" size="sm" href="/admin/siparisler">
+              Tümünü gör
+            </Button>
+          }
+        >
+          {data.recent.length === 0 ? (
+            <EmptyState icon={<ShoppingBag className="h-5 w-5" />} title="Henüz sipariş yok" description="İlk sipariş geldiğinde burada görünecek." />
+          ) : (
+            <Table>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2.5">Sipariş No</th>
-                  <th className="px-3 py-2.5">Tarih</th>
-                  <th className="px-3 py-2.5">Durum</th>
-                  <th className="px-3 py-2.5 text-right">Tutar</th>
+                  <Th>Sipariş</Th>
+                  <Th className="hidden sm:table-cell">Müşteri</Th>
+                  <Th>Durum</Th>
+                  <Th className="text-right">Tutar</Th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {recentOrders.map((order) => {
-                  const isReturned = ['iade_edildi', 'iade_talebi'].includes(order.status)
+              <tbody>
+                {data.recent.map(o => {
+                  const m = statusMeta(o.status)
                   return (
-                    <tr key={order.id} className="hover:bg-gray-50/50">
-                      <td className="px-3 py-3 font-mono font-bold text-[#1A1A1A]">{order.order_number || order.id.slice(0, 8)}</td>
-                      <td className="px-3 py-3 text-gray-500">{new Date(order.created_at).toLocaleDateString('tr-TR')}</td>
-                      <td className="px-3 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isReturned ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        }`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className={`px-3 py-3 text-right font-bold ${isReturned ? 'line-through text-gray-400' : 'text-[#1A1A1A]'}`}>
-                        {formatPrice(order.total || order.total_amount || 0)}
-                      </td>
+                    <tr key={o.id} className="hover:bg-[#FAF9F7]">
+                      <Td>
+                        <Link href={`/admin/siparisler/${o.id}`} className="font-medium tabular-nums hover:underline">
+                          {orderNo(o)}
+                        </Link>
+                        <p className="text-xs text-kul">{formatDate(o.created_at, true)}</p>
+                      </Td>
+                      <Td className="hidden max-w-[12rem] truncate sm:table-cell">{customerNameOf(o)}</Td>
+                      <Td>
+                        <Badge tone={m.tone}>{m.label}</Badge>
+                      </Td>
+                      <Td className="whitespace-nowrap text-right tabular-nums">{formatTL(o.total)}</Td>
                     </tr>
                   )
                 })}
               </tbody>
-            </table>
-          </div>
-        </div>
+            </Table>
+          )}
+        </Card>
 
-        <div className="bg-white p-6 rounded-xs shadow-xs border border-gray-200">
-          <h2 className="text-base font-bold font-playfair text-[#1A1A1A] mb-4 pb-2 border-b border-gray-100">Öne Çıkan Ürünler</h2>
-          <div className="space-y-3">
-            {topProducts.map((product, idx) => (
-              <div key={product.id} className="flex justify-between items-center text-xs border-b pb-2.5 last:border-0 border-gray-100">
-                <div className="flex items-center space-x-3">
-                  <span className="text-gray-400 font-bold">{idx + 1}.</span>
-                  <span className="font-semibold text-[#1A1A1A]">{product.name}</span>
+        {/* Ziyaretçiler */}
+        <Card title="Ziyaretçiler" description="Siteye giren farklı kişi sayısı">
+          {data.visitors ? (
+            <dl className="grid grid-cols-2 gap-4">
+              {(
+                [
+                  ['Bugün', data.visitors.today],
+                  ['Son 7 gün', data.visitors.week],
+                  ['Bu ay', data.visitors.month],
+                  [String(view.year), data.visitors.year],
+                ] as const
+              ).map(([l, v]) => (
+                <div key={l}>
+                  <dt className="text-[13px] text-kul">{l}</dt>
+                  <dd className="mt-1 font-display text-2xl leading-none tabular-nums text-ink">
+                    {Number(v || 0).toLocaleString('tr-TR')}
+                  </dd>
                 </div>
-                <span className="text-[#C5A572] font-bold">{formatPrice(product.base_price)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-[13px] text-kul">Ziyaretçi verisi şu an alınamadı. Sayfayı yenileyip tekrar deneyin.</p>
+          )}
+        </Card>
       </div>
+
+      {/* Az kalan stok */}
+      <Card
+        title="Az kalan stok"
+        description={`Aktif ürünlerde ${LOW_STOCK_LIMIT} adet veya daha az kalan seçenekler`}
+        padded={false}
+        className="scroll-mt-24"
+      >
+        <div id="az-kalan-stok" className="scroll-mt-24" />
+        {data.lowStock.length === 0 ? (
+          <div className="flex items-center gap-2 px-5 py-5 text-sm text-kul">
+            <Check className="h-4 w-4 text-emerald-700" /> Tüm aktif ürünlerde yeterli stok var.
+          </div>
+        ) : (
+          <ul className="divide-y divide-[#F3F0EC]">
+            {data.lowStock.slice(0, 12).map(v => (
+              <li key={v.id}>
+                <Link
+                  href={`/admin/urunler/${v.product_id}`}
+                  className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-[#FAF9F7] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{v.products?.name || 'Ürün'}</p>
+                    <p className="text-[13px] text-kul">{[v.color_name, v.size].filter(Boolean).join(' · ') || 'Standart'}</p>
+                  </div>
+                  {v.stock_quantity <= 0 ? (
+                    <Badge tone="danger">
+                      <AlertTriangle className="h-3 w-3" /> Tükendi
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning">{v.stock_quantity} adet</Badge>
+                  )}
+                </Link>
+              </li>
+            ))}
+            {data.lowStock.length > 12 && (
+              <li className="px-5 py-3 text-[13px] text-kul">
+                ve {data.lowStock.length - 12} seçenek daha.{' '}
+                <Link href="/admin/urunler" className="font-medium text-ink underline">
+                  Ürünlere git
+                </Link>
+              </li>
+            )}
+          </ul>
+        )}
+      </Card>
     </div>
   )
 }
 
-function StatCard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  subtitle,
-  isHighlight = false,
-  isYearlyHighlight = false
-}: { 
-  title: string; 
-  value: string; 
-  icon: any; 
-  subtitle: string;
-  isHighlight?: boolean;
-  isYearlyHighlight?: boolean;
-}) {
+/* ------------------------------------------------------------------ */
+
+type TodoItem = { icon: ReactNode; count: number; title: string; detail: string; href: string }
+
+function TodoRow({ item }: { item: TodoItem }) {
+  const active = item.count > 0
   return (
-    <div className={`p-4 rounded-xs border transition-all flex items-center space-x-3.5 ${
-      isYearlyHighlight
-        ? 'bg-[#1A1A1A] text-white border-[#C5A572] shadow-md ring-1 ring-[#C5A572]'
-        : isHighlight 
-          ? 'bg-amber-50/70 border-amber-300 shadow-2xs' 
-          : 'bg-white border-gray-200 shadow-xs'
-    }`}>
-      <div className={`p-2.5 rounded-full flex-shrink-0 ${
-        isYearlyHighlight
-          ? 'bg-[#C5A572] text-[#1A1A1A]'
-          : isHighlight 
-            ? 'bg-amber-200/80 text-amber-900' 
-            : 'bg-gray-50 text-[#C5A572] border border-gray-100'
-      }`}>
-        <Icon size={20} />
+    <Link
+      href={item.href}
+      className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-[#FAF9F7] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink"
+    >
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+          active ? 'bg-murdum/10 text-murdum' : 'bg-[#F1EEEA] text-kul'
+        }`}
+        aria-hidden="true"
+      >
+        {active ? item.icon : <Check className="h-5 w-5" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={`text-sm ${active ? 'font-medium text-ink' : 'text-kul'}`}>
+          {active && <span className="mr-1.5 tabular-nums">{item.count}</span>}
+          {item.title}
+        </p>
+        <p className="text-[13px] text-kul">{item.detail}</p>
       </div>
-      <div>
-        <p className={`text-[11px] font-medium ${isYearlyHighlight ? 'text-[#C5A572]' : 'text-gray-500'}`}>{title}</p>
-        <p className={`text-base font-bold mt-0.5 ${isYearlyHighlight ? 'text-white' : 'text-[#1A1A1A]'}`}>{value}</p>
-        {subtitle && <p className={`text-[10px] font-medium mt-0.5 ${isYearlyHighlight ? 'text-gray-300' : 'text-gray-400'}`}>{subtitle}</p>}
+      <ChevronRight className="h-4 w-4 shrink-0 text-kul transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+    </Link>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-8" aria-busy="true" aria-label="Genel bakış yükleniyor">
+      <PageHeader title="Genel bakış" />
+      <div className="h-72 animate-pulse rounded-lg border border-[#E7E3DE] bg-white" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="h-28 animate-pulse rounded-lg border border-[#E7E3DE] bg-white" />
+        ))}
       </div>
+      <div className="h-80 animate-pulse rounded-lg border border-[#E7E3DE] bg-white" />
     </div>
   )
 }

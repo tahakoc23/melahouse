@@ -1,10 +1,9 @@
-// @ts-nocheck
 'use client'
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
-import { X, Upload, Film, Link as LinkIcon, Plus, GripVertical, Video, ExternalLink } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Film, ImagePlus, Link as LinkIcon, Loader2, Star, Video, X } from 'lucide-react'
 
 interface ImageUploaderProps {
   bucket: string
@@ -14,42 +13,45 @@ interface ImageUploaderProps {
   existingImages?: string[]
   onRemoveImage?: (url: string) => void
   maxFiles?: number
+  /** İsteğe bağlı: görsel başına alternatif metin (erişilebilirlik / SEO) */
+  altTexts?: Record<string, string>
+  onAltTextChange?: (url: string, alt: string) => void
 }
 
-function InstagramIcon({ className = "w-4 h-4" }: { className?: string }) {
+function InstagramIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
       <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
       <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
     </svg>
-  );
+  )
 }
 
 export function getInstagramEmbedUrl(url: string): string | null {
   try {
-    const match = url.match(/instagram\.com\/(reel|p)\/([^/?#]+)/i);
+    const match = url.match(/instagram\.com\/(reel|p)\/([^/?#]+)/i)
     if (match && match[2]) {
-      return `https://www.instagram.com/${match[1]}/${match[2]}/embed`;
+      return `https://www.instagram.com/${match[1]}/${match[2]}/embed`
     }
-  } catch (e) {}
-  return null;
+  } catch {}
+  return null
 }
 
 export function getYoutubeEmbedUrl(url: string): string | null {
   try {
-    let videoId = '';
+    let videoId = ''
     if (url.includes('youtu.be/')) {
-      videoId = url.split('youtu.be/')[1].split('?')[0];
+      videoId = url.split('youtu.be/')[1].split('?')[0]
     } else if (url.includes('watch?v=')) {
-      videoId = url.split('watch?v=')[1].split('&')[0];
+      videoId = url.split('watch?v=')[1].split('&')[0]
     }
-    if (videoId) return `https://www.youtube.com/embed/${videoId}`;
-  } catch (e) {}
-  return null;
+    if (videoId) return `https://www.youtube.com/embed/${videoId}`
+  } catch {}
+  return null
 }
 
-const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'avi'];
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'avi']
 
 const MIME_EXTENSION: Record<string, string> = {
   'video/mp4': 'mp4',
@@ -60,57 +62,61 @@ const MIME_EXTENSION: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
-};
+}
 
 /** Lower-cased file extension of a URL's path (ignores query string and hash). */
 function getUrlExtension(url: string): string {
-  let path = url;
+  let path = url
   try {
-    path = new URL(url).pathname;
+    path = new URL(url).pathname
   } catch {
-    path = url.split(/[?#]/)[0];
+    path = url.split(/[?#]/)[0]
   }
-  const last = path.split('/').pop() || '';
-  const dot = last.lastIndexOf('.');
-  return dot >= 0 ? last.slice(dot + 1).toLowerCase() : '';
+  const last = path.split('/').pop() || ''
+  const dot = last.lastIndexOf('.')
+  return dot >= 0 ? last.slice(dot + 1).toLowerCase() : ''
 }
 
 export function getMediaType(url: string): 'image' | 'video' | 'instagram' | 'youtube' {
-  if (!url) return 'image';
-  const lower = url.toLowerCase();
+  if (!url) return 'image'
+  const lower = url.toLowerCase()
   if (lower.includes('instagram.com/reel/') || lower.includes('instagram.com/p/')) {
-    return 'instagram';
+    return 'instagram'
   }
   if (lower.includes('youtube.com/watch') || lower.includes('youtu.be/')) {
-    return 'youtube';
+    return 'youtube'
   }
   // Decide by MIME (data URLs) or by the real file extension — never by a
   // "video" substring, which matched folder/product names like ".../video-elbise.jpg".
-  if (lower.startsWith('data:video/')) return 'video';
-  if (VIDEO_EXTENSIONS.includes(getUrlExtension(url))) return 'video';
-  return 'image';
+  if (lower.startsWith('data:video/')) return 'video'
+  if (VIDEO_EXTENSIONS.includes(getUrlExtension(url))) return 'video'
+  return 'image'
 }
 
 export function isVideoUrl(url: string): boolean {
-  const type = getMediaType(url);
-  return type === 'video' || type === 'instagram' || type === 'youtube';
+  const type = getMediaType(url)
+  return type === 'video' || type === 'instagram' || type === 'youtube'
 }
 
-export default function ImageUploader({ 
-  bucket, 
-  folder = '', 
-  onUploadSuccess, 
+const MAX_FILE_MB = 50
+
+export default function ImageUploader({
+  bucket,
+  folder = '',
+  onUploadSuccess,
   onReorder,
   existingImages = [],
   onRemoveImage,
-  maxFiles = 10
+  maxFiles = 10,
+  altTexts,
+  onAltTextChange,
 }: ImageUploaderProps) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [customUrl, setCustomUrl] = useState('')
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [urlError, setUrlError] = useState<string | null>(null)
-  const supabase = createClient()
+  const [error, setError] = useState<string | null>(null)
+  const [supabase] = useState(() => createClient())
 
   // Always call the latest callback / see the latest count, even when an
   // upload started several renders ago (avoids stale-closure overwrites).
@@ -122,269 +128,289 @@ export default function ImageUploader({
   })
 
   const remainingSlots = Math.max(0, maxFiles - existingImages.length)
+  const single = maxFiles === 1
 
-  const onDrop = useCallback(async (droppedFiles: File[]) => {
-    const slots = Math.max(0, maxFiles - existingCountRef.current)
-    const acceptedFiles = droppedFiles.slice(0, slots)
-    if (droppedFiles.length > slots) {
-      alert(`En fazla ${maxFiles} medya eklenebilir. ${droppedFiles.length - slots} dosya atlandı.`)
-    }
-    if (acceptedFiles.length === 0) return
+  const onDrop = useCallback(
+    async (droppedFiles: File[]) => {
+      setError(null)
+      const slots = Math.max(0, maxFiles - existingCountRef.current)
+      const tooBig = droppedFiles.filter(f => f.size > MAX_FILE_MB * 1024 * 1024)
+      const candidates = droppedFiles.filter(f => f.size <= MAX_FILE_MB * 1024 * 1024)
+      const acceptedFiles = candidates.slice(0, slots)
+      const notes: string[] = []
+      if (tooBig.length) notes.push(`${tooBig.length} dosya ${MAX_FILE_MB} MB’tan büyük olduğu için atlandı.`)
+      if (candidates.length > slots) notes.push(`En fazla ${maxFiles} medya eklenebilir; ${candidates.length - slots} dosya atlandı.`)
+      if (acceptedFiles.length === 0) {
+        if (notes.length) setError(notes.join(' '))
+        return
+      }
 
-    setUploading(true)
-    setProgress(0)
-    const uploadedUrls: string[] = []
+      setUploading(true)
+      setProgress(0)
+      const uploadedUrls: string[] = []
 
-    try {
-      for (let i = 0; i < acceptedFiles.length; i++) {
-        const file = acceptedFiles[i]
-        const nameExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
-        const fileExt = nameExt || MIME_EXTENSION[file.type] || 'bin'
-        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
-        const filePath = folder ? `${folder}/${fileName}` : fileName
-        const isVideoFile = file.type.startsWith('video/') || VIDEO_EXTENSIONS.includes(fileExt)
+      try {
+        for (let i = 0; i < acceptedFiles.length; i++) {
+          const file = acceptedFiles[i]
+          const nameExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
+          const fileExt = nameExt || MIME_EXTENSION[file.type] || 'bin'
+          const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+          const filePath = folder ? `${folder}/${fileName}` : fileName
+          const isVideoFile = file.type.startsWith('video/') || VIDEO_EXTENSIONS.includes(fileExt)
 
-        const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file, {
+          const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file, {
             cacheControl: '3600',
             upsert: true,
-            contentType: file.type || (isVideoFile ? 'video/mp4' : 'image/jpeg')
+            contentType: file.type || (isVideoFile ? 'video/mp4' : 'image/jpeg'),
           })
 
-        if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(filePath)
-          uploadedUrls.push(publicUrl)
-        } else {
-          console.error('Upload error:', uploadError)
-          alert('Dosya yüklenirken hata oluştu: ' + uploadError.message)
+          if (!uploadError) {
+            const {
+              data: { publicUrl },
+            } = supabase.storage.from(bucket).getPublicUrl(filePath)
+            uploadedUrls.push(publicUrl)
+          } else {
+            console.error('Upload error:', uploadError)
+            notes.push(`“${file.name}” yüklenemedi: ${uploadError.message}`)
+          }
+
+          setProgress(Math.round(((i + 1) / acceptedFiles.length) * 100))
         }
 
-        setProgress(Math.round(((i + 1) / acceptedFiles.length) * 100))
+        if (uploadedUrls.length > 0) {
+          onUploadSuccessRef.current(uploadedUrls)
+        }
+      } catch (err) {
+        console.error('Upload error:', err)
+        notes.push(`Yükleme yarıda kaldı: ${err instanceof Error ? err.message : String(err)}`)
+      } finally {
+        setUploading(false)
+        setProgress(0)
+        if (notes.length) setError(notes.join(' '))
       }
-
-      if (uploadedUrls.length > 0) {
-        onUploadSuccessRef.current(uploadedUrls)
-      }
-    } catch (error: any) {
-      console.error('Upload error:', error)
-      alert('Medya yüklenirken bir hata oluştu: ' + (error.message || error))
-    } finally {
-      setUploading(false)
-      setProgress(0)
-    }
-  }, [bucket, folder, maxFiles, supabase])
+    },
+    [bucket, folder, maxFiles, supabase],
+  )
 
   const handleAddCustomUrl = (e?: React.SyntheticEvent) => {
     if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault()
+      e.stopPropagation()
     }
-    const trimmed = customUrl.trim();
-    if (!trimmed) return;
+    const trimmed = customUrl.trim()
+    if (!trimmed) return
     if (existingImages.length >= maxFiles) {
-      setUrlError(`En fazla ${maxFiles} medya eklenebilir. Yeni eklemek için önce birini silin.`);
-      return;
+      setError(`En fazla ${maxFiles} medya eklenebilir. Yeni eklemek için önce birini kaldırın.`)
+      return
     }
     if (!/^https?:\/\//i.test(trimmed)) {
-      setUrlError('Lütfen http:// veya https:// ile başlayan geçerli bir bağlantı girin.');
-      return;
+      setError('http:// veya https:// ile başlayan bir bağlantı yapıştırın.')
+      return
     }
     if (existingImages.includes(trimmed)) {
-      setUrlError('Bu bağlantı zaten ekli.');
-      return;
+      setError('Bu bağlantı zaten ekli.')
+      return
     }
-    setUrlError(null);
-    onUploadSuccess([trimmed]);
-    setCustomUrl('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleAddCustomUrl(e);
-    }
-  };
+    setError(null)
+    onUploadSuccess([trimmed])
+    setCustomUrl('')
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.gif'],
-      'video/*': ['.mp4', '.webm', '.mov', '.avi']
+      'video/*': ['.mp4', '.webm', '.mov', '.avi'],
     },
-    disabled: uploading || remainingSlots === 0
+    disabled: uploading || remainingSlots === 0,
   })
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+  const move = (from: number, to: number) => {
+    if (!onReorder || to < 0 || to >= existingImages.length || from === to) return
+    const next = [...existingImages]
+    const [item] = next.splice(from, 1)
+    next.splice(to, 0, item)
+    onReorder(next)
   }
 
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault()
-    if (draggedIndex === null || draggedIndex === dropIndex) return
-
-    const newImages = [...existingImages]
-    const [draggedItem] = newImages.splice(draggedIndex, 1)
-    newImages.splice(dropIndex, 0, draggedItem)
-
+    if (draggedIndex === null) return
+    move(draggedIndex, dropIndex)
     setDraggedIndex(null)
-    if (onReorder) {
-      onReorder(newImages)
-    }
   }
 
-  return (
-    <div className="space-y-4 font-inter">
-      {/* Custom Video / Instagram / Image URL Paste Box */}
-      <div className="bg-gray-50/80 p-3 rounded-xs border border-gray-200 space-y-2">
-        <label className="block text-xs font-semibold text-[#1A1A1A]">
-          Video Linki veya Görsel URL Yapıştırarak Ekle (Instagram Reel, YouTube, MP4 URL)
-        </label>
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <LinkIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              value={customUrl}
-              onChange={(e) => { setCustomUrl(e.target.value); setUrlError(null); }}
-              onKeyDown={handleKeyDown}
-              placeholder="https://instagram.com/reel/..., https://youtube.com/... veya https://.../video.mp4"
-              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#C5A572]"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleAddCustomUrl}
-            className="px-4 py-2 bg-[#1A1A1A] hover:bg-[#C5A572] text-white text-xs font-semibold uppercase tracking-wider rounded-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Ekle</span>
-          </button>
-        </div>
-        {urlError && <p role="alert" className="text-[11px] font-semibold text-rose-700">{urlError}</p>}
-      </div>
+  const iconBtn =
+    'flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-ink shadow-sm hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink disabled:opacity-40 cursor-pointer'
 
-      {/* Drag & Drop File Upload Area */}
+  return (
+    <div className="space-y-4">
+      {existingImages.length > 0 && (
+        <div>
+          {!single && existingImages.length > 1 && onReorder && (
+            <p className="mb-2 text-xs text-kul">İlk görsel kapak olur. Sürükleyerek ya da oklarla sırayı değiştirin.</p>
+          )}
+          <ul className={single ? 'grid max-w-[220px] grid-cols-1 gap-3' : 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'}>
+            {existingImages.map((url, index) => {
+              const mediaType = getMediaType(url)
+              const isVid = isVideoUrl(url)
+              return (
+                <li key={url} className="space-y-1.5">
+                  <div
+                    draggable={!!onReorder && !single}
+                    onDragStart={e => {
+                      setDraggedIndex(index)
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={e => {
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                    }}
+                    onDrop={e => handleDrop(e, index)}
+                    onDragEnd={() => setDraggedIndex(null)}
+                    className={`group relative aspect-[3/4] overflow-hidden rounded-md border bg-[#F7F6F4] ${
+                      draggedIndex === index ? 'border-dashed border-ink opacity-40' : 'border-[#E7E3DE]'
+                    } ${onReorder && !single ? 'cursor-move' : ''}`}
+                  >
+                    {index === 0 && !single && (
+                      <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-ink px-2 py-0.5 text-[11px] font-medium text-white">Kapak</span>
+                    )}
+
+                    {isVid ? (
+                      <div className="relative flex h-full w-full items-center justify-center bg-ink">
+                        {mediaType === 'video' ? (
+                          <video src={`${url}#t=0.1`} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                        ) : (
+                          <div className="space-y-1 p-2 text-center text-white/80">
+                            {mediaType === 'instagram' ? <InstagramIcon className="mx-auto h-6 w-6" /> : <Video className="mx-auto h-6 w-6" aria-hidden />}
+                            <span className="block text-xs">{mediaType === 'instagram' ? 'Instagram videosu' : 'YouTube videosu'}</span>
+                          </div>
+                        )}
+                        <span className="absolute bottom-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-ink">
+                          <Film className="h-3 w-3" aria-hidden /> Video
+                        </span>
+                      </div>
+                    ) : (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={url} alt={altTexts?.[url] || `Görsel ${index + 1}`} className="h-full w-full object-cover" />
+                    )}
+
+                    <div className="absolute right-1.5 top-1.5 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+                      {onRemoveImage && (
+                        <button type="button" onClick={() => onRemoveImage(url)} className={iconBtn} aria-label={`Görsel ${index + 1}’i kaldır`} title="Kaldır">
+                          <X className="h-4 w-4" aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                    {onReorder && !single && existingImages.length > 1 && (
+                      <div className="absolute inset-x-1.5 bottom-1.5 z-10 flex justify-between gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+                        <button type="button" onClick={() => move(index, index - 1)} disabled={index === 0} className={iconBtn} aria-label={`Görsel ${index + 1}’i sola taşı`}>
+                          <ArrowLeft className="h-4 w-4" aria-hidden />
+                        </button>
+                        {index !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => move(index, 0)}
+                            className={`${iconBtn} w-auto gap-1 px-2 text-[11px] font-medium`}
+                            aria-label={`Görsel ${index + 1}’i kapak yap`}
+                          >
+                            <Star className="h-3.5 w-3.5" aria-hidden /> Kapak yap
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => move(index, index + 1)}
+                          disabled={index === existingImages.length - 1}
+                          className={iconBtn}
+                          aria-label={`Görsel ${index + 1}’i sağa taşı`}
+                        >
+                          <ArrowRight className="h-4 w-4" aria-hidden />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {onAltTextChange && !isVid && (
+                    <input
+                      type="text"
+                      value={altTexts?.[url] || ''}
+                      onChange={e => onAltTextChange(url, e.target.value)}
+                      placeholder="Alt metin (isteğe bağlı)"
+                      aria-label={`Görsel ${index + 1} alt metni`}
+                      className="h-8 w-full rounded-md border border-[#DCD6CF] bg-white px-2 text-xs text-ink placeholder:text-[#A8A19A] focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                    />
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
       {existingImages.length < maxFiles && (
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-xs p-6 text-center cursor-pointer transition-colors ${
-            isDragActive ? 'border-[#C5A572] bg-amber-50/50' : 'border-gray-300 hover:border-[#C5A572] bg-white'
-          } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-7 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink ${
+            isDragActive ? 'border-ink bg-[#F1EEEA]' : 'border-[#CFC8C0] bg-[#FAF9F7] hover:border-ink'
+          } ${uploading ? 'cursor-wait opacity-70' : ''}`}
         >
-          <input {...getInputProps()} />
-          <div className="flex flex-col items-center space-y-2">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
-              {uploading ? (
-                <div className="w-5 h-5 border-2 border-[#C5A572] border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Upload className="w-5 h-5 text-[#C5A572]" />
-              )}
-            </div>
-            <div className="text-xs">
-              <span className="font-semibold text-[#1A1A1A]">Bilgisayardan Fotoğraf veya Video Yükle</span>
-              <span className="text-gray-500"> (Sürükleyin veya Tıklayın)</span>
-            </div>
-            <p className="text-[10px] text-gray-400">PNG, JPG, WEBP, MP4, MOV, WEBM (Maks. {maxFiles - existingImages.length} dosya)</p>
-          </div>
+          <input {...getInputProps()} aria-label="Bilgisayardan görsel veya video seç" />
+          <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink shadow-sm">
+            {uploading ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <ImagePlus className="h-5 w-5" aria-hidden />}
+          </span>
+          <p className="text-sm font-medium text-ink">
+            {uploading ? `Yükleniyor… %${progress}` : isDragActive ? 'Bırakın, yükleyelim' : 'Görselleri buraya sürükleyin ya da tıklayıp seçin'}
+          </p>
+          <p className="mt-1 text-xs text-kul">
+            JPG, PNG, WEBP veya MP4 · en fazla {MAX_FILE_MB} MB · {remainingSlots} yer kaldı
+          </p>
           {uploading && (
-            <div className="mt-4 w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-[#C5A572] h-1.5 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+            <div className="mt-3 h-1 w-full max-w-xs overflow-hidden rounded-full bg-[#E7E3DE]">
+              <div className="h-1 bg-ink transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
           )}
         </div>
       )}
 
-      {/* Uploaded Media Thumbnails Grid */}
-      {existingImages.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-xs font-semibold text-gray-700">
-            <span>Yüklenen Medyalar ({existingImages.length}/{maxFiles})</span>
-            <span className="text-[10px] text-gray-400">Sürükleyerek sıralamayı değiştirebilirsiniz</span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {existingImages.map((url, index) => {
-              const mediaType = getMediaType(url);
-              const isVid = isVideoUrl(url);
-
-              return (
-                <div
-                  key={url + index}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDrop={(e) => handleDrop(e, index)}
-                  className={`relative aspect-[3/4] bg-[#FAFAF8] rounded-xs border overflow-hidden group cursor-move ${
-                    draggedIndex === index ? 'opacity-40 border-dashed border-[#C5A572]' : 'border-gray-200 shadow-xs'
-                  }`}
-                >
-                  <div className="absolute top-1 left-1 z-10 p-1 bg-black/50 text-white rounded-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                    <GripVertical className="w-3 h-3" />
-                  </div>
-
-                  {index === 0 && (
-                    <span className="absolute top-1 right-1 z-10 bg-[#C5A572] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-xs uppercase tracking-wider shadow-xs">
-                      Kapak
-                    </span>
-                  )}
-
-                  {isVid ? (
-                    <div className="relative w-full h-full bg-black flex items-center justify-center">
-                      {mediaType === 'video' ? (
-                        <video 
-                          src={`${url}#t=0.1`} 
-                          className="w-full h-full object-cover" 
-                          muted 
-                          playsInline 
-                          preload="metadata" 
-                        />
-                      ) : (
-                        <div className="text-center p-2 space-y-1">
-                          {mediaType === 'instagram' ? (
-                            <InstagramIcon className="w-6 h-6 text-pink-400 mx-auto" />
-                          ) : (
-                            <Video className="w-6 h-6 text-red-500 mx-auto" />
-                          )}
-                          <span className="text-[10px] text-gray-300 block font-semibold truncate max-w-[100px]">
-                            {mediaType === 'instagram' ? 'Reel Video' : 'YouTube Video'}
-                          </span>
-                        </div>
-                      )}
-                      
-                      <span className="absolute bottom-1 left-1 bg-[#C5A572] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-xs uppercase tracking-wider flex items-center gap-1 shadow-xs z-10">
-                        <Film className="w-3 h-3" /> Video
-                      </span>
-                    </div>
-                  ) : (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={url} alt={`Media ${index + 1}`} className="w-full h-full object-cover" />
-                  )}
-
-                  {onRemoveImage && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveImage(url)}
-                      className="absolute bottom-1 right-1 z-10 p-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xs shadow-xs transition-colors cursor-pointer"
-                      title="Medyayı Sil"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
+      {existingImages.length < maxFiles && (
+        <div>
+          <label className="mb-1.5 block text-[13px] font-medium text-ink" htmlFor={`url-${bucket}-${folder}`}>
+            Ya da bağlantı yapıştırın
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kul" aria-hidden />
+              <input
+                id={`url-${bucket}-${folder}`}
+                type="url"
+                inputMode="url"
+                value={customUrl}
+                onChange={e => {
+                  setCustomUrl(e.target.value)
+                  setError(null)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleAddCustomUrl(e)
+                }}
+                placeholder="Görsel, MP4, Instagram Reel veya YouTube linki"
+                className="h-10 w-full rounded-md border border-[#DCD6CF] bg-white pl-9 pr-3 text-sm text-ink placeholder:text-[#A8A19A] focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAddCustomUrl}
+              disabled={!customUrl.trim()}
+              className="inline-flex h-10 items-center rounded-md border border-[#DCD6CF] bg-white px-4 text-sm font-medium text-ink hover:border-ink disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+            >
+              Ekle
+            </button>
           </div>
         </div>
+      )}
+
+      {error && (
+        <p role="alert" className="rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          {error}
+        </p>
       )}
     </div>
   )

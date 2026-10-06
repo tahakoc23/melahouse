@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       // Store sizes inside raw_metadata or fabric/description if schema requires
       const updatedMetadata = {
         ...(raw_metadata || {}),
-        sizes: sizes || 'Standart'
+        sizes: sizes || null
       };
 
       // Check if product_url already exists
@@ -126,8 +126,8 @@ export async function POST(request: Request) {
             sku,
             price: Number(price || 0),
             stock_status: stock_status || 'stokta_var',
-            color: color || 'Standart',
-            fabric: fabric || 'Belirtilmemiş',
+            color: color || null,
+            fabric: fabric || null,
             description,
             image_url,
             raw_metadata: updatedMetadata,
@@ -150,8 +150,8 @@ export async function POST(request: Request) {
             sku,
             price: Number(price || 0),
             stock_status: stock_status || 'stokta_var',
-            color: color || 'Standart',
-            fabric: fabric || 'Belirtilmemiş',
+            color: color || null,
+            fabric: fabric || null,
             description,
             image_url,
             raw_metadata: updatedMetadata,
@@ -224,13 +224,14 @@ export async function POST(request: Request) {
               price: newPrice > 0 ? newPrice : oldPrice,
               stock_status: newStock,
               title: fresh.title || p.title,
-              color: fresh.color !== 'Standart' ? fresh.color : p.color,
-              fabric: fresh.fabric !== 'Belirtilmemiş' ? fresh.fabric : p.fabric,
+              color: fresh.color || p.color,
+              fabric: fresh.fabric || p.fabric,
               description: fresh.description || p.description,
               image_url: fresh.image_url || p.image_url,
               raw_metadata: {
                 ...(p.raw_metadata || {}),
-                sizes: fresh.sizes || 'Standart'
+                ...(fresh.raw_metadata || {}),
+                sizes: fresh.sizes || p.raw_metadata?.sizes || null
               },
               last_scraped_at: new Date().toISOString()
             })

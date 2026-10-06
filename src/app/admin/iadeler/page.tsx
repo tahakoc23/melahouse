@@ -1,324 +1,370 @@
-// @ts-nocheck
 'use client'
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { formatPrice } from '@/lib/utils'
-import { RefreshCw, Search, Eye, CheckCircle2, User, Phone, Mail, Package, AlertCircle, Sparkles } from 'lucide-react'
-import { Toast } from '@/components/ui/Toast'
-import { ConfirmModal } from '@/components/ui/ConfirmModal'
-import { LuxuryConfetti } from '@/components/ui/LuxuryConfetti'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import toast from 'react-hot-toast'
+import { Check, Mail, Phone, RotateCcw, Search, X } from 'lucide-react'
+import { Badge, Button, Card, EmptyState, Notice, PageHeader, Tabs, TextArea, TextInput } from '@/components/admin/ui'
+import { ConfirmDialog } from '@/components/admin/ui/AdminDialog'
+import {
+  createAdminBrowserClient,
+  customerEmailOf,
+  customerNameOf,
+  customerPhoneOf,
+  errorMessage,
+  formatDate,
+  orderNo,
+  parseReturnRequest,
+  refreshAdminCounts,
+} from '@/components/admin/ui/orderHelpers'
+import { formatTL } from '@/lib/utils'
+
+type ReturnItem = {
+  id: string
+  product_name: string | null
+  variant_info: string | null
+  quantity: number | null
+  unit_price: number | null
+  total_price: number | null
+  products: { name: string | null; product_images: { image_url: string; is_primary: boolean | null }[] | null } | null
+}
+
+type ReturnOrder = {
+  id: string
+  order_number: string | null
+  status: string | null
+  total: number | null
+  notes: string | null
+  created_at: string | null
+  updated_at: string | null
+  shipping_address: unknown
+  profiles: { full_name: string | null; email: string | null; phone: string | null } | null
+  order_items: ReturnItem[] | null
+}
+
+type TabKey = 'bekleyen' | 'tamamlanan'
+
+const REJECT_MAX = 300
 
 export default function AdminReturnsPage() {
-  const [orders, setOrders] = useState<any[]>([])
+  const supabase = useMemo(() => createAdminBrowserClient(), [])
+  const [orders, setOrders] = useState<ReturnOrder[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all')
-  const [showCelebration, setShowCelebration] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<TabKey>('bekleyen')
+  const [query, setQuery] = useState('')
 
-  // Confirm Modal State
-  const [confirmData, setConfirmData] = useState<{ isOpen: boolean; orderId: string; orderNumber: string } | null>(null)
-  const [approving, setApproving] = useState(false)
+  const [approveTarget, setApproveTarget] = useState<ReturnOrder | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<ReturnOrder | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectError, setRejectError] = useState<string | null>(null)
+  const [working, setWorking] = useState(false)
 
-  // Toast Notification State
-  const [toast, setToast] = useState<{ isOpen: boolean; type: 'success' | 'error'; title?: string; message: string }>({
-    isOpen: false,
-    type: 'success',
-    message: ''
-  })
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success', title?: string) => {
-    setToast({ isOpen: true, type, title, message })
-  }
-
-  const fetchReturnOrders = async (silent = false) => {
-    if (!silent) setLoading(true)
+  const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/returns", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "İade talepleri alınamadı.");
+      const res = await fetch('/api/admin/returns', { cache: 'no-store' })
+      const data = (await res.json().catch(() => ({}))) as { orders?: ReturnOrder[]; error?: string }
+      if (!res.ok) throw new Error(data.error || 'İade talepleri alınamadı.')
       setOrders(data.orders || [])
-    } catch (err: any) {
-      console.error(err)
-      if (!silent) showToast(err.message || 'İade talepleri yüklenirken bir hata oluştu.', 'error')
+      setError(null)
+    } catch (err) {
+      setError(errorMessage(err, 'İade talepleri alınamadı.'))
     } finally {
-      if (!silent) setLoading(false)
+      setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    fetchReturnOrders()
   }, [])
 
-  const handleOpenApproveModal = (orderId: string, orderNumber: string) => {
-    setConfirmData({ isOpen: true, orderId, orderNumber })
-  }
+  // İlk yükleme: load() içindeki setState çağrıları istek tamamlandıktan sonra çalışır
+  useEffect(() => {
+    const run = () => {
+      load().catch(() => {})
+    }
+    run()
+  }, [load])
 
-  const handleConfirmApprove = async () => {
-    if (!confirmData) return;
-    setApproving(true)
-
-    const targetId = confirmData.orderId;
-    const targetNumber = confirmData.orderNumber;
-
+  const approve = async () => {
+    if (!approveTarget) return
+    setWorking(true)
     try {
-      const res = await fetch("/api/admin/returns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: targetId })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "İade onaylanamadı.");
-
-      // Instantly update local React state to iade_edildi
-      setOrders(prev => prev.map(o => o.id === targetId ? { ...o, status: 'iade_edildi' } : o));
-
-      // Trigger Celebration Fireworks & Toast
-      setShowCelebration(true)
-      setTimeout(() => setShowCelebration(false), 5000)
-
-      showToast(`#${targetNumber} siparişinin iadesi başarıyla onaylandı ve tamamlandı.`, 'success', '✨ İade Onaylandı')
-      setConfirmData(null)
-      fetchReturnOrders(true)
-    } catch (err: any) {
-      console.error(err)
-      showToast(err.message || 'İade onaylanırken hata oluştu.', 'error')
+      const res = await fetch('/api/admin/returns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: approveTarget.id }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error || 'İade onaylanamadı.')
+      const now = new Date().toISOString()
+      setOrders(prev => prev.map(o => (o.id === approveTarget.id ? { ...o, status: 'iade_edildi', updated_at: now } : o)))
+      toast.success(`${orderNo(approveTarget)} iadesi onaylandı. Ürünler stoğa eklendi.`)
+      setApproveTarget(null)
+      refreshAdminCounts()
+    } catch (err) {
+      toast.error(errorMessage(err, 'İade onaylanamadı. Sayfayı yenileyip tekrar deneyin.'))
     } finally {
-      setApproving(false)
+      setWorking(false)
     }
   }
 
-  const filteredOrders = orders.filter(o => {
-    const customerName = o.profiles?.full_name || o.shipping_address?.full_name || ''
-    const matchesSearch = (o.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
-                          (customerName.toLowerCase().includes(searchTerm.toLowerCase()) || '')
-    
-    if (filter === 'pending') return matchesSearch && o.status === 'iade_talebi'
-    if (filter === 'completed') return matchesSearch && o.status === 'iade_edildi'
-    return matchesSearch
-  })
+  const openReject = (o: ReturnOrder) => {
+    setRejectTarget(o)
+    setRejectReason('')
+    setRejectError(null)
+  }
+
+  const reject = async () => {
+    if (!rejectTarget) return
+    const reason = rejectReason.trim()
+    if (!reason) {
+      setRejectError('Kısa bir neden yazın. Örn. "İade süresi geçmiş".')
+      return
+    }
+    setWorking(true)
+    try {
+      const line = `[İADE REDDEDİLDİ] Nedeni: ${reason}`
+      const notes = rejectTarget.notes ? `${rejectTarget.notes}\n${line}` : line
+      const { data, error: err } = await supabase
+        .from('orders')
+        .update({ status: 'teslim_edildi', notes, updated_at: new Date().toISOString() })
+        .eq('id', rejectTarget.id)
+        .eq('status', 'iade_talebi')
+        .select('id')
+      if (err) throw err
+      if (!data || data.length === 0) throw new Error('Bu talep artık beklemede değil. Sayfayı yenileyin.')
+      setOrders(prev => prev.filter(o => o.id !== rejectTarget.id))
+      toast.success(`${orderNo(rejectTarget)} iade talebi reddedildi.`)
+      setRejectTarget(null)
+      refreshAdminCounts()
+    } catch (err) {
+      toast.error(errorMessage(err, 'İade talebi reddedilemedi.'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const searched = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('tr')
+    if (!q) return orders
+    return orders.filter(o => [orderNo(o), customerNameOf(o), customerEmailOf(o)].some(v => v.toLocaleLowerCase('tr').includes(q)))
+  }, [orders, query])
+
+  const pending = searched.filter(o => o.status === 'iade_talebi')
+  const done = searched.filter(o => o.status === 'iade_edildi')
+  const list = tab === 'bekleyen' ? pending : done
 
   return (
-    <div className="space-y-6 text-xs font-inter max-w-6xl mx-auto pb-12 relative">
-      {/* Luxury Confetti Fireworks */}
-      <LuxuryConfetti active={showCelebration} duration={5000} />
+    <div>
+      <PageHeader title="İadeler" description="Müşterilerin iade taleplerini onaylayın veya reddedin." />
 
-      {/* Toast Notification */}
-      <Toast 
-        isOpen={toast.isOpen}
-        type={toast.type}
-        title={toast.title}
-        message={toast.message}
-        onClose={() => setToast(prev => ({ ...prev, isOpen: false }))}
+      <div className="mb-4 max-w-md">
+        <TextInput
+          type="search"
+          aria-label="İadelerde ara"
+          placeholder="Sipariş no, müşteri adı veya e-posta"
+          prefix={<Search className="h-4 w-4" />}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+      </div>
+
+      <Tabs
+        tabs={[
+          { value: 'bekleyen' as TabKey, label: 'Bekleyen', count: pending.length },
+          { value: 'tamamlanan' as TabKey, label: 'Tamamlanan', count: done.length },
+        ]}
+        value={tab}
+        onChange={setTab}
       />
 
-      {/* Luxury Confirmation Modal */}
-      {confirmData && (
-        <ConfirmModal
-          isOpen={confirmData.isOpen}
-          title="İade Talebini Onayla"
-          message={`#${confirmData.orderNumber} numaralı sipariş için ürün iadesini onaylamak ve durumu "İade Edildi" olarak güncellemek istediğinize emin misiniz?`}
-          confirmText="Evet, İadeyi Onayla"
-          cancelText="Vazgeç"
-          type="warning"
-          isLoading={approving}
-          onConfirm={handleConfirmApprove}
-          onClose={() => setConfirmData(null)}
-        />
+      {error && (
+        <div className="mb-4">
+          <Notice tone="danger" title="İadeler yüklenemedi">
+            <p>{error}</p>
+            <button
+              type="button"
+              className="mt-1 font-medium underline"
+              onClick={() => {
+                setLoading(true)
+                load()
+              }}
+            >
+              Tekrar dene
+            </button>
+          </Notice>
+        </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold font-playfair text-[#1A1A1A]">İade Talepleri Yönetimi</h1>
-          <p className="text-gray-500 text-[11px] mt-0.5">Müşterilerden gelen ürün iade taleplerini inceleyin ve onaylayın.</p>
+      {loading ? (
+        <div className="space-y-4" aria-busy="true" aria-label="İadeler yükleniyor">
+          {[0, 1].map(i => (
+            <div key={i} className="h-48 animate-pulse rounded-lg border border-[#E7E3DE] bg-white" />
+          ))}
         </div>
-        <div className="flex items-center gap-2 bg-amber-50 text-amber-900 px-3.5 py-2 rounded-xs border border-amber-200 font-medium">
-          <RefreshCw className="w-4 h-4 text-amber-700" />
-          <span className="font-bold">Bekleyen Talepler: {orders.filter(o => o.status === 'iade_talebi').length}</span>
-        </div>
-      </div>
+      ) : list.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<RotateCcw className="h-5 w-5" />}
+            title={query ? 'Aramanızla eşleşen iade yok' : tab === 'bekleyen' ? 'Bekleyen iade talebi yok' : 'Tamamlanmış iade yok'}
+            description={
+              query
+                ? 'Sipariş numarasını veya müşteri adını kontrol edin.'
+                : tab === 'bekleyen'
+                  ? 'Müşteri bir iade talebi gönderdiğinde burada görünecek.'
+                  : 'Onayladığınız iadeler burada listelenir.'
+            }
+          />
+        </Card>
+      ) : (
+        <ul className="space-y-4">
+          {list.map(o => (
+            <li key={o.id}>
+              <ReturnCard order={o} onApprove={() => setApproveTarget(o)} onReject={() => openReject(o)} />
+            </li>
+          ))}
+        </ul>
+      )}
 
-      {/* Filter and Search Controls */}
-      <div className="bg-white p-4 rounded-xs shadow-xs border border-gray-200 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="flex-1 w-full relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <input 
-            type="text" 
-            placeholder="Sipariş No veya Müşteri Adı ile ara..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xs text-xs"
+      <ConfirmDialog
+        open={!!approveTarget}
+        onClose={() => setApproveTarget(null)}
+        onConfirm={approve}
+        loading={working}
+        title={approveTarget ? `${orderNo(approveTarget)} iadesini onayla` : 'İadeyi onayla'}
+        message="Sipariş İade edildi durumuna geçer ve ürünler stoğa geri eklenir."
+        confirmLabel="İadeyi onayla"
+      >
+        {approveTarget && (
+          <div className="pb-2">
+            <Notice tone="info">
+              Para iadesi otomatik yapılmaz. {formatTL(approveTarget.total)} tutarını müşteriye ödeme yönteminden ayrıca iade edin.
+            </Notice>
+          </div>
+        )}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!rejectTarget}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={reject}
+        loading={working}
+        tone="danger"
+        title={rejectTarget ? `${orderNo(rejectTarget)} iade talebini reddet` : 'İade talebini reddet'}
+        message="Sipariş Teslim edildi durumuna döner. Neden, sipariş notlarına eklenir; müşteri bu notu görmez, ayrıca bilgilendirin."
+        confirmLabel="Talebi reddet"
+      >
+        <div className="pb-2">
+          <TextArea
+            label="Ret nedeni"
+            rows={3}
+            maxLength={REJECT_MAX}
+            value={rejectReason}
+            onChange={e => {
+              setRejectReason(e.target.value)
+              if (rejectError) setRejectError(null)
+            }}
+            placeholder="Örn. Ürün kullanılmış olarak geldi"
+            hint={`${rejectReason.length}/${REJECT_MAX}`}
+            error={rejectError}
+            required
+            data-autofocus
           />
         </div>
+      </ConfirmDialog>
+    </div>
+  )
+}
 
-        <div className="flex gap-2 w-full md:w-auto">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-xs font-semibold uppercase tracking-wider text-[11px] transition-colors cursor-pointer ${
-              filter === 'all' ? 'bg-[#1A1A1A] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Tümü ({orders.length})
-          </button>
-          <button
-            onClick={() => setFilter('pending')}
-            className={`px-4 py-2 rounded-xs font-semibold uppercase tracking-wider text-[11px] transition-colors cursor-pointer ${
-              filter === 'pending' ? 'bg-[#C5A572] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            İncelemedekiler ({orders.filter(o => o.status === 'iade_talebi').length})
-          </button>
-          <button
-            onClick={() => setFilter('completed')}
-            className={`px-4 py-2 rounded-xs font-semibold uppercase tracking-wider text-[11px] transition-colors cursor-pointer ${
-              filter === 'completed' ? 'bg-emerald-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Tamamlananlar ({orders.filter(o => o.status === 'iade_edildi').length})
-          </button>
+function ReturnCard({ order, onApprove, onReject }: { order: ReturnOrder; onApprove: () => void; onReject: () => void }) {
+  const pending = order.status === 'iade_talebi'
+  const req = parseReturnRequest(order.notes)
+  const email = customerEmailOf(order)
+  const phone = customerPhoneOf(order)
+  const items = order.order_items || []
+
+  return (
+    <article className="rounded-lg border border-[#E7E3DE] bg-white">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EFEBE6] px-5 py-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/admin/siparisler/${order.id}`} className="font-semibold tabular-nums text-ink hover:underline">
+              {orderNo(order)}
+            </Link>
+            {pending ? <Badge tone="warning">Onay bekliyor</Badge> : <Badge tone="success">İade tamamlandı</Badge>}
+          </div>
+          <p className="mt-0.5 text-[13px] text-kul">
+            {pending ? 'Talep' : 'Onay'}: {formatDate(order.updated_at, true)} · Sipariş: {formatDate(order.created_at)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-kul">İade tutarı</p>
+          <p className="text-[15px] font-semibold tabular-nums">{formatTL(order.total)}</p>
+        </div>
+      </header>
+
+      <div className="grid gap-5 px-5 py-4 md:grid-cols-3">
+        <div className="space-y-1 text-[13px]">
+          <p className="text-xs text-kul">Müşteri</p>
+          <p className="text-sm font-medium">{customerNameOf(order)}</p>
+          {email && (
+            <a href={`mailto:${email}`} className="flex items-center gap-1.5 break-all hover:underline">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-kul" />
+              {email}
+            </a>
+          )}
+          {phone && phone !== '-' && (
+            <a href={`tel:${phone.replace(/\s/g, '')}`} className="flex items-center gap-1.5 hover:underline">
+              <Phone className="h-3.5 w-3.5 shrink-0 text-kul" />
+              {phone}
+            </a>
+          )}
+        </div>
+
+        <div className="md:col-span-2">
+          <p className="text-xs text-kul">İade nedeni</p>
+          {req ? (
+            <>
+              <p className="text-sm font-medium">{req.reason || 'Belirtilmemiş'}</p>
+              {req.explanation && <p className="mt-0.5 whitespace-pre-line text-[13px] text-ink">{req.explanation}</p>}
+            </>
+          ) : (
+            <p className="text-sm text-kul">Müşteri neden belirtmemiş.</p>
+          )}
         </div>
       </div>
 
-      {/* Orders List */}
-      {loading ? (
-        <div className="bg-white p-12 text-center text-gray-400 rounded-xs border border-gray-200">
-          <RefreshCw className="w-8 h-8 animate-spin text-[#C5A572] mx-auto mb-2" />
-          <p>İade talepleri yükleniyor...</p>
-        </div>
-      ) : filteredOrders.length === 0 ? (
-        <div className="bg-white p-12 text-center text-gray-500 rounded-xs border border-dashed border-gray-200 space-y-2">
-          <Package className="w-10 h-10 text-gray-300 mx-auto mb-1" />
-          <p className="font-semibold text-sm">İade talebi bulunmamaktadır.</p>
-          <p className="text-gray-400 text-xs">Arama veya filtre kriterlerinizi değiştirmeyi deneyebilirsiniz.</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {filteredOrders.map((order) => {
-            const customerName = order.profiles?.full_name || order.shipping_address?.full_name || 'Müşteri';
-            const customerEmail = order.profiles?.email || order.shipping_address?.email || '-';
-            const customerPhone = order.profiles?.phone || order.shipping_address?.phone || '-';
-            const isPending = order.status === 'iade_talebi';
-            const isApproved = order.status === 'iade_edildi';
-            const orderTotal = Number(order.total ?? order.total_amount ?? 0);
+      <ul className="border-t border-[#EFEBE6]">
+        {items.map(item => {
+          const img =
+            item.products?.product_images?.find(i => i.is_primary)?.image_url || item.products?.product_images?.[0]?.image_url
+          return (
+            <li key={item.id} className="flex items-center gap-3 border-b border-[#F3F0EC] px-5 py-3 last:border-0">
+              <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded bg-[#F1EEEA]">
+                {img && <Image src={img} alt="" fill sizes="40px" className="object-cover" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{item.product_name || item.products?.name || 'Ürün'}</p>
+                <p className="text-[13px] text-kul">
+                  {[item.variant_info, `${item.quantity} adet`].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <p className="whitespace-nowrap tabular-nums">
+                {formatTL(item.total_price ?? (item.unit_price || 0) * (item.quantity || 1))}
+              </p>
+            </li>
+          )
+        })}
+      </ul>
 
-            return (
-              <motion.div 
-                layout
-                key={order.id} 
-                className="bg-white border border-gray-200 rounded-xs overflow-hidden shadow-xs space-y-0"
-              >
-                {/* Header */}
-                <div className="bg-gray-50 p-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
-                  <div className="flex flex-wrap gap-6">
-                    <div>
-                      <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider block">Sipariş No</span>
-                      <span className="font-mono font-bold text-[#1A1A1A] text-xs">{order.order_number || order.id.slice(0, 8)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider block">Talep Tarihi</span>
-                      <span className="font-semibold text-gray-800">{new Date(order.updated_at || order.created_at).toLocaleDateString('tr-TR')}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider block">Toplam Tutar</span>
-                      <span className="font-bold text-[#1A1A1A]">{formatPrice(orderTotal)}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      isPending ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    }`}>
-                      {isPending ? '🔄 İade Talebi Alındı' : '🟢 İade Onaylandı'}
-                    </span>
-                    <Link 
-                      href={`/admin/siparisler/${order.id}`}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-[#1A1A1A] hover:text-white text-gray-700 font-semibold rounded-xs transition-colors flex items-center gap-1 cursor-pointer text-[11px]"
-                    >
-                      <Eye size={14} /> Sipariş Detayı
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Return Reason Box */}
-                <div className="bg-amber-50/70 border-b border-amber-100 p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 space-y-1">
-                    <h4 className="font-bold text-amber-950 text-xs">Müşteri İade Talebi Sebebi:</h4>
-                    <p className="text-amber-900 font-mono text-xs whitespace-pre-line leading-relaxed bg-white p-3 rounded-xs border border-amber-200/80 shadow-2xs">
-                      {order.notes || 'İade sebebi belirtilmemiş'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Main Details Grid: Customer & Items */}
-                <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Customer Info */}
-                  <div className="bg-gray-50/80 p-4 rounded-xs border border-gray-200 space-y-2">
-                    <h4 className="font-bold text-[#1A1A1A] text-xs border-b pb-2 flex items-center gap-2">
-                      <User size={14} className="text-[#C5A572]" /> Müşteri İletişim Bilgileri
-                    </h4>
-                    <div className="space-y-1.5 text-xs text-gray-700 pt-1">
-                      <p><span className="font-semibold text-gray-900">Ad Soyad:</span> {customerName}</p>
-                      <p className="flex items-center gap-1.5"><Mail size={12} className="text-gray-400" /> <span className="font-medium">{customerEmail}</span></p>
-                      <p className="flex items-center gap-1.5"><Phone size={12} className="text-gray-400" /> <span className="font-medium">{customerPhone}</span></p>
-                    </div>
-                  </div>
-
-                  {/* Products Being Returned */}
-                  <div className="lg:col-span-2 space-y-3">
-                    <h4 className="font-bold text-[#1A1A1A] text-xs border-b pb-2 flex items-center gap-2">
-                      <Package size={14} className="text-[#C5A572]" /> İade Edilen Ürün(ler)
-                    </h4>
-                    <div className="space-y-2">
-                      {order.order_items?.map((item: any) => {
-                        const product = item.products
-                        const mainImg = product?.product_images?.find((img: any) => img.is_primary)?.image_url || product?.product_images?.[0]?.image_url
-
-                        return (
-                          <div key={item.id} className="flex items-center gap-3 p-2 bg-gray-50/50 rounded-xs border border-gray-100">
-                            <div className="relative w-12 h-16 bg-gray-200 rounded-xs overflow-hidden flex-shrink-0 border border-gray-200">
-                              {mainImg && <Image unoptimized src={mainImg} alt={product?.name || item.product_name || "Ürün"} fill className="object-cover" />}
-                            </div>
-                            <div className="flex-1">
-                              <h5 className="font-semibold text-[#1A1A1A] text-xs">{product?.name || item.product_name || "Ürün"}</h5>
-                              <p className="text-gray-500 text-[10px] mt-0.5">Varyant: {item.variant_info || 'Standart'} | Adet: {item.quantity}</p>
-                            </div>
-                            <span className="font-bold text-[#1A1A1A] text-xs">{formatPrice((item.unit_price || 0) * (item.quantity || 1))}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Action / Status Bar */}
-                <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end items-center gap-3">
-                  {isApproved ? (
-                    <motion.div 
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="flex items-center gap-2 text-emerald-800 font-bold text-xs bg-emerald-100 px-4 py-2 rounded-xs border border-emerald-200 shadow-2xs"
-                    >
-                      <CheckCircle2 size={16} className="text-emerald-600 animate-bounce" />
-                      <span>İADE ONAYLANDI & TAMAMLANDI</span>
-                    </motion.div>
-                  ) : (
-                    <button
-                      onClick={() => handleOpenApproveModal(order.id, order.order_number || order.id.slice(0, 8))}
-                      className="bg-[#1A1A1A] hover:bg-emerald-800 text-white px-6 py-2.5 rounded-xs font-semibold text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-md flex items-center gap-2"
-                    >
-                      <Sparkles size={16} className="text-[#C5A572]" />
-                      <span>İadeyi Onayla & Tamamla</span>
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
+      {pending && (
+        <footer className="flex flex-col-reverse gap-2 border-t border-[#EFEBE6] bg-[#FAF9F7] px-5 py-3 sm:flex-row sm:justify-end">
+          <Button variant="danger" onClick={onReject} icon={<X className="h-4 w-4" />}>
+            Reddet
+          </Button>
+          <Button onClick={onApprove} icon={<Check className="h-4 w-4" />}>
+            İadeyi onayla
+          </Button>
+        </footer>
       )}
-    </div>
+    </article>
   )
 }

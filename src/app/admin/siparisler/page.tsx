@@ -1,134 +1,318 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { formatPrice } from '@/lib/utils'
-import { Search, Eye, Package, Truck, CheckCircle2, Clock, RefreshCw } from 'lucide-react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { ChevronRight, Search, ShoppingBag } from 'lucide-react'
+import { Badge, Button, Card, EmptyState, Notice, PageHeader, Table, Tabs, Td, TextInput, Th } from '@/components/admin/ui'
+import {
+  createAdminBrowserClient,
+  customerEmailOf,
+  customerNameOf,
+  errorMessage,
+  formatDate,
+  orderNo,
+  statusMeta,
+  type OrderStatus,
+} from '@/components/admin/ui/orderHelpers'
+import { formatTL } from '@/lib/utils'
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  odeme_bekliyor: { label: 'Ödeme Bekliyor', color: 'bg-amber-100 text-amber-800' },
-  siparis_alindi: { label: 'Sipariş Alındı', color: 'bg-sky-100 text-sky-800' },
-  odeme_alindi: { label: 'Sipariş Alındı', color: 'bg-sky-100 text-sky-800' },
-  hazirlaniyor: { label: 'Hazırlanıyor', color: 'bg-indigo-100 text-indigo-800' },
-  kargoya_verildi: { label: 'Kargoya Verildi', color: 'bg-purple-100 text-purple-800' },
-  teslim_edildi: { label: 'Teslim Edildi', color: 'bg-emerald-100 text-emerald-800' },
-  iade_talebi: { label: 'İade Talebi Alındı', color: 'bg-amber-100 text-amber-900 border border-amber-300' },
-  iade_edildi: { label: 'İade Edildi', color: 'bg-rose-100 text-rose-800' },
-  iptal_edildi: { label: 'İptal Edildi', color: 'bg-rose-100 text-rose-800' },
-};
+type OrderRow = {
+  id: string
+  order_number: string | null
+  status: string | null
+  total: number | null
+  created_at: string | null
+  shipping_address: unknown
+  profiles: { full_name: string | null; email: string | null } | null
+  order_items: { quantity: number | null }[] | null
+}
+
+type TabKey = 'tumu' | 'yeni' | 'hazirlaniyor' | 'kargoda' | 'teslim' | 'odeme' | 'iptal'
+
+const TAB_STATUSES: Record<Exclude<TabKey, 'tumu'>, OrderStatus[]> = {
+  yeni: ['siparis_alindi', 'odeme_alindi'],
+  hazirlaniyor: ['hazirlaniyor'],
+  kargoda: ['kargoya_verildi'],
+  teslim: ['teslim_edildi'],
+  odeme: ['odeme_bekliyor'],
+  iptal: ['iptal_edildi', 'iade_talebi', 'iade_edildi'],
+}
+
+const TAB_LABELS: Record<TabKey, string> = {
+  tumu: 'Tümü',
+  yeni: 'Yeni',
+  hazirlaniyor: 'Hazırlanıyor',
+  kargoda: 'Kargoda',
+  teslim: 'Teslim edildi',
+  odeme: 'Ödeme bekliyor',
+  iptal: 'İptal / iade',
+}
+
+const TAB_ORDER: TabKey[] = ['tumu', 'yeni', 'hazirlaniyor', 'kargoda', 'teslim', 'odeme', 'iptal']
+
+const EMPTY_TEXT: Record<TabKey, string> = {
+  tumu: 'Henüz sipariş yok. İlk sipariş geldiğinde burada görünecek.',
+  yeni: 'Hazırlanmayı bekleyen yeni sipariş yok.',
+  hazirlaniyor: 'Şu an hazırlanan sipariş yok.',
+  kargoda: 'Kargoda bekleyen sipariş yok.',
+  teslim: 'Teslim edilmiş sipariş yok.',
+  odeme: 'Ödemesi beklenen kart siparişi yok.',
+  iptal: 'İptal edilen veya iade edilen sipariş yok.',
+}
+
+const PAGE_SIZE = 50
+
+function matchesTab(status: string | null, tab: TabKey) {
+  if (tab === 'tumu') return true
+  return TAB_STATUSES[tab].includes(status as OrderStatus)
+}
+
+function itemCount(o: OrderRow) {
+  return (o.order_items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+}
 
 export default function AdminOrdersPage() {
-  const supabase = createClient()
-  const [orders, setOrders] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  return (
+    <Suspense fallback={<OrdersSkeleton />}>
+      <OrdersList />
+    </Suspense>
+  )
+}
 
-  useEffect(() => {
-    async function fetchOrders() {
-      const { data } = await supabase
-        .from('orders' as any)
-        .select('*, profiles(full_name)')
-        .order('created_at', { ascending: false })
-      setOrders(data || [])
-      setLoading(false)
+function OrdersList() {
+  const supabase = useMemo(() => createAdminBrowserClient(), [])
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const paramTab = searchParams.get('durum') as TabKey | null
+  const tab: TabKey = paramTab && TAB_ORDER.includes(paramTab) ? paramTab : 'tumu'
+
+  const [orders, setOrders] = useState<OrderRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [visible, setVisible] = useState(PAGE_SIZE)
+
+  const load = useCallback(async () => {
+    const { data, error: err } = await supabase
+      .from('orders')
+      .select('id, order_number, status, total, created_at, shipping_address, profiles(full_name, email), order_items(quantity)')
+      .order('created_at', { ascending: false })
+    if (err) {
+      setError(errorMessage(err, 'Siparişler yüklenemedi.'))
+    } else {
+      setOrders((data || []) as unknown as OrderRow[])
+      setError(null)
     }
-    fetchOrders()
+    setLoading(false)
   }, [supabase])
 
-  const filteredOrders = orders.filter(o => {
-    const customerName = o.profiles?.full_name || o.shipping_address?.full_name || '';
-    const searchMatch = (o.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
-                        (customerName.toLowerCase().includes(searchTerm.toLowerCase()) || '');
-    const statusMatch = statusFilter ? o.status === statusFilter : true;
-    return searchMatch && statusMatch;
-  })
+  // İlk yükleme: load() içindeki setState çağrıları istek tamamlandıktan sonra çalışır
+  useEffect(() => {
+    const run = () => {
+      load().catch(() => {})
+    }
+    run()
+  }, [load])
+
+  const setTab = (next: TabKey) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next === 'tumu') params.delete('durum')
+    else params.set('durum', next)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    setVisible(PAGE_SIZE)
+  }
+
+  const searched = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('tr')
+    if (!q) return orders
+    return orders.filter(o =>
+      [orderNo(o), customerNameOf(o), customerEmailOf(o)].some(v => v.toLocaleLowerCase('tr').includes(q)),
+    )
+  }, [orders, query])
+
+  const tabs = TAB_ORDER.map(t => ({
+    value: t,
+    label: TAB_LABELS[t],
+    count: searched.filter(o => matchesTab(o.status, t)).length,
+  }))
+
+  const filtered = searched.filter(o => matchesTab(o.status, tab))
+  const shown = filtered.slice(0, visible)
 
   return (
-    <div className="space-y-6 text-xs font-inter">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold font-playfair text-[#1A1A1A]">Sipariş Yönetimi</h1>
-        <span className="text-gray-500 font-medium">Toplam {orders.length} Sipariş</span>
+    <div>
+      <PageHeader
+        title="Siparişler"
+        description={loading ? undefined : `${orders.length} sipariş`}
+      />
+
+      <div className="mb-4 max-w-md">
+        <TextInput
+          type="search"
+          aria-label="Siparişlerde ara"
+          placeholder="Sipariş no, müşteri adı veya e-posta"
+          prefix={<Search className="h-4 w-4" />}
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value)
+            setVisible(PAGE_SIZE)
+          }}
+        />
       </div>
 
-      <div className="bg-white p-4 rounded-xs shadow-xs border border-gray-200 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <input 
-            type="text" 
-            placeholder="Sipariş No veya Müşteri Adı ile ara..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xs text-xs"
-          />
+      <Tabs tabs={tabs} value={tab} onChange={setTab} />
+
+      {error && (
+        <div className="mb-4">
+          <Notice tone="danger" title="Siparişler yüklenemedi">
+            <p>{error}</p>
+            <button type="button" className="mt-1 font-medium underline" onClick={() => { setLoading(true); load() }}>
+              Tekrar dene
+            </button>
+          </Notice>
         </div>
-        <select 
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-xs min-w-[200px] text-xs font-semibold bg-white"
-        >
-          <option value="">Tüm Sipariş Durumları</option>
-          <option value="siparis_alindi">🔵 Sipariş Alındı</option>
-          <option value="odeme_bekliyor">🟡 Ödeme Bekliyor</option>
-          <option value="hazirlaniyor">🟣 Hazırlanıyor</option>
-          <option value="kargoya_verildi">🚚 Kargoya Verildi</option>
-          <option value="teslim_edildi">🟢 Teslim Edildi</option>
-          <option value="iade_talebi">🔄 İade Talebi Alındı</option>
-          <option value="iade_edildi">🔴 İade Edildi</option>
-          <option value="iptal_edildi">❌ İptal Edildi</option>
-        </select>
-      </div>
+      )}
 
-      <div className="bg-white rounded-xs shadow-xs border border-gray-200 overflow-hidden">
-        <table className="w-full text-xs text-left">
-          <thead className="text-[11px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-3">Sipariş No</th>
-              <th className="px-4 py-3">Müşteri</th>
-              <th className="px-4 py-3">Tarih</th>
-              <th className="px-4 py-3">Durum</th>
-              <th className="px-4 py-3">Toplam Tutar</th>
-              <th className="px-4 py-3 text-right">İşlem</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Siparişler yükleniyor...</td></tr>
-            ) : filteredOrders.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Aradığınız kriterlere uygun sipariş bulunamadı.</td></tr>
-            ) : (
-              filteredOrders.map((order) => {
-                const statusCfg = STATUS_CONFIG[order.status] || { label: order.status, color: 'bg-gray-100 text-gray-800' };
-                const orderTotal = Number(order.total ?? order.total_amount ?? 0);
-                const customerName = order.profiles?.full_name || order.shipping_address?.full_name || 'Müşteri';
+      {loading ? (
+        <OrdersSkeleton bare />
+      ) : filtered.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<ShoppingBag className="h-5 w-5" />}
+            title={query ? 'Aramanızla eşleşen sipariş yok' : 'Bu listede sipariş yok'}
+            description={query ? 'Sipariş numarasını veya müşteri adını kontrol edin ya da aramayı temizleyin.' : EMPTY_TEXT[tab]}
+            action={
+              query ? (
+                <Button variant="secondary" onClick={() => setQuery('')}>
+                  Aramayı temizle
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          {/* Masaüstü: tablo */}
+          <Card padded={false} className="hidden md:block">
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Sipariş no</Th>
+                  <Th>Tarih</Th>
+                  <Th>Müşteri</Th>
+                  <Th className="text-right">Ürün</Th>
+                  <Th className="text-right">Tutar</Th>
+                  <Th>Durum</Th>
+                  <Th className="w-10">
+                    <span className="sr-only">Detay</span>
+                  </Th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(o => {
+                  const meta = statusMeta(o.status)
+                  return (
+                    <tr
+                      key={o.id}
+                      className="cursor-pointer transition-colors hover:bg-[#FAF9F7]"
+                      onClick={() => router.push(`/admin/siparisler/${o.id}`)}
+                    >
+                      <Td>
+                        <Link
+                          href={`/admin/siparisler/${o.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="font-medium tabular-nums text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+                        >
+                          {orderNo(o)}
+                        </Link>
+                      </Td>
+                      <Td className="whitespace-nowrap text-kul">{formatDate(o.created_at, true)}</Td>
+                      <Td>
+                        <p className="max-w-[14rem] truncate">{customerNameOf(o)}</p>
+                        {customerEmailOf(o) && <p className="max-w-[14rem] truncate text-xs text-kul">{customerEmailOf(o)}</p>}
+                      </Td>
+                      <Td className="text-right tabular-nums text-kul">{itemCount(o)}</Td>
+                      <Td className="whitespace-nowrap text-right font-medium tabular-nums">{formatTL(o.total)}</Td>
+                      <Td>
+                        <Badge tone={meta.tone}>{meta.label}</Badge>
+                      </Td>
+                      <Td className="text-kul">
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                      </Td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </Table>
+          </Card>
 
-                return (
-                  <tr key={order.id} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-3 font-mono font-bold text-[#1A1A1A]">{order.order_number || order.id.slice(0, 8).toUpperCase()}</td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{customerName}</td>
-                    <td className="px-4 py-3 text-gray-500">{new Date(order.created_at).toLocaleDateString('tr-TR')}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${statusCfg.color}`}>
-                        {statusCfg.label}
+          {/* Mobil: kart listesi */}
+          <ul className="space-y-2 md:hidden">
+            {shown.map(o => {
+              const meta = statusMeta(o.status)
+              return (
+                <li key={o.id}>
+                  <Link
+                    href={`/admin/siparisler/${o.id}`}
+                    className="block rounded-lg border border-[#E7E3DE] bg-white p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium tabular-nums">{orderNo(o)}</p>
+                        <p className="truncate text-[13px] text-kul">{customerNameOf(o)}</p>
+                      </div>
+                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-[13px]">
+                      <span className="text-kul">
+                        {formatDate(o.created_at)} · {itemCount(o)} ürün
                       </span>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-[#1A1A1A]">{formatPrice(orderTotal)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Link 
-                        href={`/admin/siparisler/${order.id}`} 
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-[#1A1A1A] hover:text-white text-gray-700 font-semibold rounded-xs transition-colors cursor-pointer text-[11px]"
-                      >
-                        <Eye size={14} /> Detay & Yönet
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                      <span className="font-medium tabular-nums text-ink">{formatTL(o.total)}</span>
+                    </div>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+
+          {filtered.length > visible && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <span className="text-[13px] text-kul">
+                {filtered.length} siparişten {visible} tanesi gösteriliyor
+              </span>
+              <Button variant="secondary" size="sm" onClick={() => setVisible(v => v + PAGE_SIZE)}>
+                Daha fazla göster
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function OrdersSkeleton({ bare = false }: { bare?: boolean }) {
+  const rows = (
+    <div className="rounded-lg border border-[#E7E3DE] bg-white" aria-busy="true" aria-label="Siparişler yükleniyor">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 border-b border-[#F3F0EC] px-4 py-4 last:border-0">
+          <div className="h-4 w-28 animate-pulse rounded bg-[#F1EEEA]" />
+          <div className="h-4 w-24 animate-pulse rounded bg-[#F1EEEA]" />
+          <div className="h-4 flex-1 animate-pulse rounded bg-[#F1EEEA]" />
+          <div className="h-4 w-20 animate-pulse rounded bg-[#F1EEEA]" />
+        </div>
+      ))}
+    </div>
+  )
+  if (bare) return rows
+  return (
+    <div>
+      <PageHeader title="Siparişler" />
+      {rows}
     </div>
   )
 }

@@ -1,102 +1,166 @@
-// @ts-nocheck
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, Loader2, Plus, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ImageUploader from '@/components/admin/ImageUploader'
-import AdminNotificationModal from '@/components/ui/AdminNotificationModal'
-import { Save, Plus, Trash2, Layout, Megaphone, Image as ImageIcon, BookOpen } from 'lucide-react'
+import { Badge, Button, Card, Field, Notice, PageHeader, StickyActions, Tabs, TextArea, TextInput } from '@/components/admin/ui'
+import { notify } from '@/components/admin/ui/siteToast'
+import {
+  AnnouncementPreview,
+  HeroPreview,
+  LookbookPreview,
+  isVideoUrl,
+  type LookbookDraft,
+  type SlideDraft,
+} from '@/components/admin/content/HomePreviews'
+
+type Tab = 'slider' | 'announcement' | 'lookbook'
+
+/* Mağazada kayıt yokken görünen varsayılanlar (HeroSlider / AnnouncementBar / LookbookSection) */
+const DEFAULT_SLIDES: Omit<SlideDraft, 'key'>[] = [
+  {
+    title: 'Yeni sezon, sakin bir zarafetle.',
+    subtitle: 'Sonbahar · Kış 2026',
+    button_text: 'Koleksiyonu keşfet',
+    button_link: '/urunler',
+    media_url: 'https://images.unsplash.com/photo-1571513800374-df1bbe650e56?q=75&w=1800&auto=format&fit=crop',
+  },
+]
+const DEFAULT_ANNOUNCEMENTS = ['1.000 TL ve üzeri siparişlerde ücretsiz kargo', 'Teslimattan itibaren 14 gün içinde iade']
+const DEFAULT_LOOKBOOK: LookbookDraft = {
+  title: 'Az parça, doğru parça.',
+  description:
+    'MELA HOUSE, günlükten davete uzanan bir kadın gardırobunu kumaşı ve kalıbı özenle seçilmiş parçalarla kurar. Koleksiyonlarımızı her sezon küçük ve seçkin tutuyoruz; böylece her parça diğerleriyle kolayca eşleşir.',
+  button_text: 'Hikayemiz',
+  button_link: '/hakkimizda',
+  media_url: 'https://images.unsplash.com/photo-1637248666370-70a4a603c23e?q=80&w=1400&auto=format&fit=crop',
+}
+
+let keySeq = 0
+const newKey = () => `s${Date.now()}-${keySeq++}`
+
+/** Karşılaştırma için (key alanı hariç) */
+const slidesSig = (s: SlideDraft[]) =>
+  JSON.stringify(s.map(({ title, subtitle, button_text, button_link, media_url }) => [title, subtitle, button_text, button_link, media_url]))
+const annSig = (a: string[]) => JSON.stringify(a.map(t => t.trim()).filter(Boolean))
+const lbSig = (l: LookbookDraft) => JSON.stringify(l)
+
+type SiteContentRow = {
+  id: string
+  content_key: string | null
+  content_type: string | null
+  title: string | null
+  subtitle: string | null
+  content: unknown
+  media_url: string | null
+  link_url: string | null
+  link_text: string | null
+  sort_order: number | null
+}
 
 export default function AdminContentPage() {
-  const supabase = createClient()
-  const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'slider' | 'announcement' | 'banner' | 'lookbook'>('slider')
+  const supabase = useMemo(() => createClient(), [])
+  const [tab, setTab] = useState<Tab>('slider')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saving, setSaving] = useState<Tab | null>(null)
 
-  const [modalConfig, setModalConfig] = useState({
-    isOpen: false,
-    type: 'success',
-    title: '',
-    message: ''
-  })
+  const [slides, setSlides] = useState<SlideDraft[]>([])
+  const [announcements, setAnnouncements] = useState<string[]>([])
+  const [lookbook, setLookbook] = useState<LookbookDraft>(DEFAULT_LOOKBOOK)
+  const [previewIndex, setPreviewIndex] = useState(0)
 
-  // Hero Slider State (Ana Sayfa Dönen Manşet Görselleri)
-  const [slides, setSlides] = useState<any[]>([
-    {
-      id: 'slide-1',
-      title: 'Yeni sezon, sakin bir zarafetle.',
-      subtitle: 'Sonbahar · Kış 2026',
-      button_text: 'Koleksiyonu keşfet',
-      button_link: '/urunler',
-      media_url: 'https://images.unsplash.com/photo-1571513800374-df1bbe650e56?q=75&w=1800&auto=format&fit=crop'
-    }
-  ])
-
-  // Announcement Bar State (Sitenin En Üst Duyuru Bantı)
-  const [announcements, setAnnouncements] = useState<string[]>([
-    '1.000 TL ve üzeri siparişlerde ücretsiz kargo',
-    'Teslimattan itibaren 14 gün içinde iade'
-  ])
-
-  // Lookbook State (Marka Hikayesi ve Editoryal Görsel)
-  const [lookbook, setLookbook] = useState({
-    title: 'Az parça, doğru parça.',
-    description: 'MELA HOUSE, günlükten davete uzanan bir kadın gardırobunu kumaşı ve kalıbı özenle seçilmiş parçalarla kurar. Koleksiyonlarımızı her sezon küçük ve seçkin tutuyoruz; böylece her parça diğerleriyle kolayca eşleşir.',
-    button_text: 'Hikayemiz',
-    button_link: '/hakkimizda',
-    media_url: 'https://images.unsplash.com/photo-1637248666370-70a4a603c23e?q=80&w=1400&auto=format&fit=crop'
-  })
+  // Son kaydedilen hâl (değişiklik göstergesi için)
+  const [saved, setSaved] = useState({ slides: '', ann: '', lb: '' })
+  const [fromDefaults, setFromDefaults] = useState({ slides: false, ann: false, lb: false })
 
   useEffect(() => {
-    fetchContent()
-  }, [])
-
-  const fetchContent = async () => {
-    try {
-      const { data } = await supabase.from('site_content' as any).select('*')
-      if (data && data.length > 0) {
-        const sliderItems = data
-          .filter((d: any) => d.content_type === 'slider')
-          .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        if (sliderItems.length > 0) {
-          setSlides(sliderItems.map((s: any) => ({
-            id: s.id,
-            title: s.title || '',
-            subtitle: s.subtitle || '',
-            button_text: s.link_text || 'KEŞFET',
-            button_link: s.link_url || '/urunler',
-            media_url: s.media_url || ''
-          })))
+    let active = true
+    supabase
+      .from('site_content')
+      .select('*')
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          setLoadError(error.message)
+          setLoading(false)
+          return
         }
+        const rows = (data || []) as SiteContentRow[]
+        const bySort = (a: SiteContentRow, b: SiteContentRow) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
 
-        const announcementItems = data
-          .filter((d: any) => d.content_type === 'announcement')
-          .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .map((d: any) => d.title || '')
+        const sliderRows = rows.filter(d => d.content_type === 'slider').sort(bySort)
+        const nextSlides: SlideDraft[] = (
+          sliderRows.length
+            ? sliderRows.map(s => ({
+                title: s.title || '',
+                subtitle: s.subtitle || '',
+                button_text: s.link_text || 'Keşfet',
+                button_link: s.link_url || '/urunler',
+                media_url: s.media_url || '',
+              }))
+            : DEFAULT_SLIDES
+        ).map(s => ({ ...s, key: newKey() }))
+
+        const annRows = rows
+          .filter(d => d.content_type === 'announcement')
+          .sort(bySort)
+          .map(d => d.title || '')
           .filter(Boolean)
-        if (announcementItems.length > 0) setAnnouncements(announcementItems)
+        const nextAnn = annRows.length ? annRows : DEFAULT_ANNOUNCEMENTS
 
-        const lookbookItem = data.find((d: any) => d.content_key === 'lookbook_section')
-        if (lookbookItem) {
-          setLookbook({
-            title: lookbookItem.title || lookbook.title,
-            description: lookbookItem.content || lookbook.description,
-            button_text: lookbookItem.link_text || lookbook.button_text,
-            button_link: lookbookItem.link_url || lookbook.button_link,
-            media_url: lookbookItem.media_url || lookbook.media_url
-          })
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching site_content:', err)
+        const lb = rows.find(d => d.content_key === 'lookbook_section')
+        const lbText = typeof lb?.content === 'string' ? lb.content : ''
+        const nextLb: LookbookDraft = lb
+          ? {
+              title: lb.title || DEFAULT_LOOKBOOK.title,
+              description: lbText || DEFAULT_LOOKBOOK.description,
+              button_text: lb.link_text || DEFAULT_LOOKBOOK.button_text,
+              button_link: lb.link_url || DEFAULT_LOOKBOOK.button_link,
+              media_url: lb.media_url || DEFAULT_LOOKBOOK.media_url,
+            }
+          : DEFAULT_LOOKBOOK
+
+        setSlides(nextSlides)
+        setAnnouncements(nextAnn)
+        setLookbook(nextLb)
+        setSaved({ slides: slidesSig(nextSlides), ann: annSig(nextAnn), lb: lbSig(nextLb) })
+        setFromDefaults({ slides: !sliderRows.length, ann: !annRows.length, lb: !lb })
+        setLoading(false)
+      })
+    return () => {
+      active = false
     }
-  }
+  }, [supabase])
 
-  const handleSaveSlider = async () => {
-    setLoading(true)
+  const dirty = {
+    slider: !loading && slidesSig(slides) !== saved.slides,
+    announcement: !loading && annSig(announcements) !== saved.ann,
+    lookbook: !loading && lbSig(lookbook) !== saved.lb,
+  }
+  const anyDirty = dirty.slider || dirty.announcement || dirty.lookbook
+
+  // Kaydedilmemiş değişiklik varken sayfadan çıkışta uyar
+  useEffect(() => {
+    if (!anyDirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [anyDirty])
+
+  /* ---------------- Kaydetme (veri mantığı değişmedi) ---------------- */
+
+  const saveSlider = async () => {
+    const missing = slides.filter(s => !s.media_url).length
+    setSaving('slider')
     try {
       const rows = slides
-        .filter((slide: any) => slide.media_url)
-        .map((slide: any, idx: number) => ({
+        .filter(slide => slide.media_url)
+        .map((slide, idx) => ({
           content_key: `hero_slide_${idx + 1}`,
           content_type: 'slider',
           title: slide.title,
@@ -105,404 +169,394 @@ export default function AdminContentPage() {
           link_url: slide.button_link,
           media_url: slide.media_url,
           sort_order: idx,
-          is_active: true
+          is_active: true,
         }))
-      const { error: delError } = await supabase.from('site_content' as any).delete().eq('content_type', 'slider')
+      const { error: delError } = await supabase.from('site_content').delete().eq('content_type', 'slider')
       if (delError) throw delError
       if (rows.length > 0) {
-        const { error } = await supabase.from('site_content' as any).insert(rows)
+        const { error } = await supabase.from('site_content').insert(rows as never)
         if (error) throw error
       }
-      setModalConfig({
-        isOpen: true,
-        type: 'success',
-        title: 'Manşet Görselleri Güncellendi',
-        message: 'Ana sayfa manşet slaytları ve videoları başarıyla kaydedildi.'
-      })
-    } catch (err: any) {
-      setModalConfig({
-        isOpen: true,
-        type: 'error',
-        title: 'Kaydedilirken Hata Oluştu',
-        message: err.message || 'İçerik kaydedilemedi.'
-      })
+      const kept = slides.filter(s => s.media_url)
+      setSlides(kept)
+      setPreviewIndex(0)
+      setSaved(s => ({ ...s, slides: slidesSig(kept) }))
+      setFromDefaults(f => ({ ...f, slides: false }))
+      notify.success(
+        rows.length === 0
+          ? 'Kapaklar kaldırıldı. Sitede varsayılan kapak görünecek.'
+          : `Kapak görselleri kaydedildi.${missing ? ` Görseli olmayan ${missing} kapak atlandı.` : ''}`,
+      )
+    } catch (err) {
+      notify.error(`Kaydedilemedi: ${err instanceof Error ? err.message : 'bilinmeyen hata'}`)
     } finally {
-      setLoading(false)
+      setSaving(null)
     }
   }
 
-  const handleSaveAnnouncements = async () => {
-    setLoading(true)
+  const saveAnnouncements = async () => {
+    setSaving('announcement')
     try {
       const rows = announcements
-        .map((t) => t.trim())
+        .map(t => t.trim())
         .filter(Boolean)
         .map((title, idx) => ({
           content_key: `announcement_${idx + 1}`,
           content_type: 'announcement',
           title,
           sort_order: idx,
-          is_active: true
+          is_active: true,
         }))
-      const { error: delError } = await supabase.from('site_content' as any).delete().eq('content_type', 'announcement')
+      const { error: delError } = await supabase.from('site_content').delete().eq('content_type', 'announcement')
       if (delError) throw delError
       if (rows.length > 0) {
-        const { error } = await supabase.from('site_content' as any).insert(rows)
+        const { error } = await supabase.from('site_content').insert(rows as never)
         if (error) throw error
       }
-      setModalConfig({
-        isOpen: true,
-        type: 'success',
-        title: 'Duyurular Güncellendi',
-        message: 'En üst duyuru bandı kaydedildi.'
-      })
-    } catch (err: any) {
-      setModalConfig({
-        isOpen: true,
-        type: 'error',
-        title: 'Kaydedilirken Hata Oluştu',
-        message: err.message || 'Duyurular kaydedilemedi.'
-      })
+      const kept = rows.map(r => r.title)
+      setAnnouncements(kept)
+      setSaved(s => ({ ...s, ann: annSig(kept) }))
+      setFromDefaults(f => ({ ...f, ann: false }))
+      notify.success(rows.length ? 'Duyuru bandı kaydedildi.' : 'Duyurular kaldırıldı. Sitede varsayılan duyurular görünecek.')
+    } catch (err) {
+      notify.error(`Kaydedilemedi: ${err instanceof Error ? err.message : 'bilinmeyen hata'}`)
     } finally {
-      setLoading(false)
+      setSaving(null)
     }
   }
 
-  const handleSaveLookbook = async () => {
-    setLoading(true)
+  const saveLookbook = async () => {
+    if (!lookbook.title.trim() || !lookbook.media_url) {
+      notify.error('Bölümün sitede görünmesi için başlık ve görsel gerekli.')
+      return
+    }
+    setSaving('lookbook')
     try {
-      const { error } = await supabase.from('site_content' as any).upsert({
-        content_key: 'lookbook_section',
-        content_type: 'banner',
-        title: lookbook.title,
-        content: lookbook.description,
-        link_text: lookbook.button_text,
-        link_url: lookbook.button_link,
-        media_url: lookbook.media_url,
-        is_active: true
-      }, { onConflict: 'content_key' })
+      const { error } = await supabase.from('site_content').upsert(
+        {
+          content_key: 'lookbook_section',
+          content_type: 'banner',
+          title: lookbook.title,
+          content: lookbook.description,
+          link_text: lookbook.button_text,
+          link_url: lookbook.button_link,
+          media_url: lookbook.media_url,
+          is_active: true,
+        } as never,
+        { onConflict: 'content_key' },
+      )
       if (error) throw error
-      setModalConfig({
-        isOpen: true,
-        type: 'success',
-        title: 'Lookbook Alanı Güncellendi',
-        message: 'Marka hikayesi ve görseli başarıyla güncellendi.'
-      })
-    } catch (err: any) {
-      setModalConfig({
-        isOpen: true,
-        type: 'error',
-        title: 'Kaydedilirken Hata Oluştu',
-        message: err.message || 'İçerik kaydedilemedi.'
-      })
+      setSaved(s => ({ ...s, lb: lbSig(lookbook) }))
+      setFromDefaults(f => ({ ...f, lb: false }))
+      notify.success('Marka bölümü kaydedildi.')
+    } catch (err) {
+      notify.error(`Kaydedilemedi: ${err instanceof Error ? err.message : 'bilinmeyen hata'}`)
     } finally {
-      setLoading(false)
+      setSaving(null)
     }
   }
+
+  const revert = () => {
+    if (tab === 'slider') {
+      setSlides(JSON.parse(saved.slides).map((a: string[]) => ({
+        key: newKey(),
+        title: a[0],
+        subtitle: a[1],
+        button_text: a[2],
+        button_link: a[3],
+        media_url: a[4],
+      })))
+      setPreviewIndex(0)
+    }
+    if (tab === 'announcement') setAnnouncements(JSON.parse(saved.ann))
+    if (tab === 'lookbook') setLookbook(JSON.parse(saved.lb))
+  }
+
+  /* ---------------- Yardımcılar ---------------- */
+
+  const updateSlide = (idx: number, patch: Partial<SlideDraft>) =>
+    setSlides(prev => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
+
+  const moveSlide = (idx: number, dir: -1 | 1) => {
+    const to = idx + dir
+    if (to < 0 || to >= slides.length) return
+    setSlides(prev => {
+      const next = [...prev]
+      ;[next[idx], next[to]] = [next[to], next[idx]]
+      return next
+    })
+    setPreviewIndex(to)
+  }
+
+  const moveAnn = (idx: number, dir: -1 | 1) => {
+    const to = idx + dir
+    if (to < 0 || to >= announcements.length) return
+    setAnnouncements(prev => {
+      const next = [...prev]
+      ;[next[idx], next[to]] = [next[to], next[idx]]
+      return next
+    })
+  }
+
+  const tabLabel = (label: string, isDirty: boolean) => (isDirty ? `${label} (kaydedilmedi)` : label)
+  const currentDirty = dirty[tab]
+  const notInDb = tab === 'slider' ? fromDefaults.slides : tab === 'announcement' ? fromDefaults.ann : fromDefaults.lb
+  const saveCurrent = tab === 'slider' ? saveSlider : tab === 'announcement' ? saveAnnouncements : saveLookbook
+  const saveLabel = tab === 'slider' ? 'Kapakları kaydet' : tab === 'announcement' ? 'Duyuruları kaydet' : 'Marka bölümünü kaydet'
+  const previewSlide = slides[Math.min(previewIndex, Math.max(0, slides.length - 1))]
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto font-inter">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold font-playfair text-[#1A1A1A]">Ana Sayfa & Görsel İçerik Yönetimi</h1>
-        <p className="text-xs text-gray-500 mt-1">Sitenizin ana sayfasındaki manşet slaytlarını, videolarını, duyuru bandını ve marka hikayesini buradan bilgisayarınızdan yükleyerek kolayca yönetebilirsiniz.</p>
-      </div>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader title="İçerik" description="Ana sayfadaki kapak görselleri, üst duyuru bandı ve marka bölümü." />
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-gray-200 gap-2 bg-white p-2 rounded-lg shadow-xs">
-        <button
-          onClick={() => setActiveTab('slider')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xs text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'slider' ? 'bg-[#1A1A1A] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Layout size={16} className="text-[#C5A572]" />
-          <span>1. Ana Sayfa Manşet Slaytları (Hero Slider)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('announcement')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xs text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'announcement' ? 'bg-[#1A1A1A] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Megaphone size={16} className="text-[#C5A572]" />
-          <span>2. Sitenin En Üst Duyuru Çubuğu</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lookbook')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xs text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'lookbook' ? 'bg-[#1A1A1A] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <BookOpen size={16} className="text-[#C5A572]" />
-          <span>3. Lookbook & Marka Hikayesi</span>
-        </button>
-      </div>
-
-      {/* Tab 1: Hero Slider */}
-      {activeTab === 'slider' && (
-        <div className="space-y-6">
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xs text-xs text-amber-900">
-            <p className="font-bold">📌 Nerede Görünür?</p>
-            <p>Bu alan, müşterilerinizin sitemize girdiğinde <strong>ana sayfanın en üstünde gördüğü tam ekran dönen manşet alanıdır</strong>. Bilgisayarınızdan yüksek kaliteli fotoğraf veya video (.mp4) yükleyebilirsiniz.</p>
-          </div>
-
-          {slides.map((slide, idx) => (
-            <div key={slide.id || idx} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
-              <div className="flex justify-between items-center border-b pb-2">
-                <h3 className="font-semibold text-[#1A1A1A] text-sm font-playfair">{idx + 1}. Manşet Slayt Görseli / Videosu</h3>
-                {slides.length > 1 && (
-                  <button 
-                    type="button" 
-                    onClick={() => setSlides(slides.filter((_, i) => i !== idx))}
-                    className="text-rose-600 hover:bg-rose-50 p-1.5 rounded-xs text-xs flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 size={14} />
-                    <span>Slaytı Sil</span>
-                  </button>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Bilgisayardan Fotoğraf veya Video (.MP4) Yükleyin</label>
-                <ImageUploader 
-                  bucket="content"
-                  folder="slider"
-                  existingImages={slide.media_url ? [slide.media_url] : []}
-                  maxFiles={1}
-                  onUploadSuccess={(urls) => {
-                    const newSlides = [...slides]
-                    newSlides[idx].media_url = urls[0]
-                    setSlides(newSlides)
-                  }}
-                  onRemoveImage={() => {
-                    const newSlides = [...slides]
-                    newSlides[idx].media_url = ''
-                    setSlides(newSlides)
-                  }}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Manşet Başlığı (Büyük Yazı)</label>
-                  <input 
-                    type="text" 
-                    value={slide.title} 
-                    onChange={(e) => {
-                      const newSlides = [...slides]
-                      newSlides[idx].title = e.target.value
-                      setSlides(newSlides)
-                    }}
-                    placeholder="ör. ZAMANSIZ LÜKS & İPEK KOLEKSİYONU"
-                    className="w-full p-2.5 border rounded-xs text-xs" 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Alt Açıklama Metni</label>
-                  <input 
-                    type="text" 
-                    value={slide.subtitle} 
-                    onChange={(e) => {
-                      const newSlides = [...slides]
-                      newSlides[idx].subtitle = e.target.value
-                      setSlides(newSlides)
-                    }}
-                    placeholder="ör. MELA HOUSE 2026 Özel Gece Tasarımları"
-                    className="w-full p-2.5 border rounded-xs text-xs" 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Buton Yazısı</label>
-                  <input 
-                    type="text" 
-                    value={slide.button_text} 
-                    onChange={(e) => {
-                      const newSlides = [...slides]
-                      newSlides[idx].button_text = e.target.value
-                      setSlides(newSlides)
-                    }}
-                    placeholder="ör. KOLEKSİYONU KEŞFET"
-                    className="w-full p-2.5 border rounded-xs text-xs" 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Buton Yönlendirme Linki</label>
-                  <input 
-                    type="text" 
-                    value={slide.button_link} 
-                    onChange={(e) => {
-                      const newSlides = [...slides]
-                      newSlides[idx].button_link = e.target.value
-                      setSlides(newSlides)
-                    }}
-                    placeholder="ör. /urunler veya /kategori/elbise"
-                    className="w-full p-2.5 border rounded-xs text-xs font-mono" 
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-
-          <div className="flex justify-between items-center pt-2">
-            <button
-              type="button"
-              onClick={() => setSlides([...slides, {
-                id: `slide-${Date.now()}`,
-                title: 'YENİ SEZON TASARIMLARI',
-                subtitle: 'Şık ve Zarif Kadın Koleksiyonu',
-                button_text: 'ŞİMDİ İNCELE',
-                button_link: '/urunler',
-                media_url: ''
-              }])}
-              className="border border-dashed border-gray-300 hover:border-[#C5A572] bg-white px-4 py-2.5 rounded-xs text-xs font-semibold text-[#1A1A1A] flex items-center gap-2 cursor-pointer"
-            >
-              <Plus size={16} className="text-[#C5A572]" />
-              <span>Yeni Manşet Slaytı Ekle</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleSaveSlider}
-              className="bg-[#1A1A1A] hover:bg-[#C5A572] text-white px-6 py-2.5 rounded-xs text-xs font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md"
-            >
-              <Save size={16} />
-              <span>Manşet Değişikliklerini Kaydet</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2: Announcement Bar */}
-      {activeTab === 'announcement' && (
-        <div className="space-y-6">
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xs text-xs text-amber-900">
-            <p className="font-bold">📌 Nerede Görünür?</p>
-            <p>Bu alan, sitemizin <strong>en tepesindeki mürdüm renkli duyuru bandıdır</strong>. Müşterilerinize "Ücretsiz Kargo", "Sezon İndirimi" gibi kampanya duyurularını buradan yazabilirsiniz.</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
-            <h3 className="font-semibold text-[#1A1A1A] text-sm border-b pb-2 font-playfair">En Üst Bant Kampanya Yazıları</h3>
-            
-            {announcements.map((text, idx) => (
-              <div key={idx} className="flex gap-2 items-center">
-                <input 
-                  type="text" 
-                  value={text} 
-                  onChange={(e) => {
-                    const newArr = [...announcements]
-                    newArr[idx] = e.target.value
-                    setAnnouncements(newArr)
-                  }}
-                  className="flex-1 p-2.5 border rounded-xs text-xs font-medium" 
-                  placeholder="ör. Ücretsiz Kargo — 1000 TL Üzeri Siparişlerde" 
-                />
-                <button 
-                  type="button"
-                  onClick={() => setAnnouncements(announcements.filter((_, i) => i !== idx))}
-                  className="p-2.5 text-rose-600 hover:bg-rose-50 border rounded-xs cursor-pointer"
-                  title="Duyuruyu Sil"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={() => setAnnouncements([...announcements, "Yeni Sezon Fırsatları MELA HOUSE'da"])}
-              className="border border-dashed border-gray-300 hover:border-[#C5A572] bg-white px-4 py-2 rounded-xs text-xs font-semibold text-[#1A1A1A] flex items-center gap-2 cursor-pointer"
-            >
-              <Plus size={16} className="text-[#C5A572]" />
-              <span>Yeni Duyuru Metni Ekle</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleSaveAnnouncements}
-              className="bg-[#1A1A1A] hover:bg-[#C5A572] text-white px-6 py-2.5 rounded-xs text-xs font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
-            >
-              <Save size={16} />
-              <span>Duyuruları Kaydet</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: Lookbook */}
-      {activeTab === 'lookbook' && (
-        <div className="space-y-6">
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xs text-xs text-amber-900">
-            <p className="font-bold">📌 Nerede Görünür?</p>
-            <p>Bu alan, ana sayfanızın alt kısmında bulunan <strong>"Lookbook / Marka Hikayesi"</strong> tanıtım kartıdır. Bilgisayarınızdan markanızı en iyi yansıtan yüksek çözünürlüklü editoryal görseli yükleyebilirsiniz.</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Bilgisayardan Editoryal Görsel / Video Yükleyin</label>
-              <ImageUploader 
-                bucket="content"
-                folder="lookbook"
-                existingImages={lookbook.media_url ? [lookbook.media_url] : []}
-                maxFiles={1}
-                onUploadSuccess={(urls) => setLookbook({ ...lookbook, media_url: urls[0] })}
-                onRemoveImage={() => setLookbook({ ...lookbook, media_url: '' })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Lookbook Başlığı</label>
-              <input 
-                type="text" 
-                value={lookbook.title} 
-                onChange={(e) => setLookbook({ ...lookbook, title: e.target.value })}
-                className="w-full p-2.5 border rounded-xs text-xs font-semibold" 
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Marka Hikayesi / Açıklama Metni</label>
-              <textarea 
-                rows={4} 
-                value={lookbook.description} 
-                onChange={(e) => setLookbook({ ...lookbook, description: e.target.value })}
-                className="w-full p-2.5 border rounded-xs text-xs leading-relaxed" 
-              />
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                disabled={loading}
-                onClick={handleSaveLookbook}
-                className="bg-[#1A1A1A] hover:bg-[#C5A572] text-white px-6 py-2.5 rounded-xs text-xs font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-md"
-              >
-                <Save size={16} />
-                <span>Lookbook İçeriğini Kaydet</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Notification Modal */}
-      <AdminNotificationModal 
-        isOpen={modalConfig.isOpen}
-        type={modalConfig.type}
-        title={modalConfig.title}
-        message={modalConfig.message}
-        primaryButtonText="Tamam"
-        onPrimaryClick={() => setModalConfig({ ...modalConfig, isOpen: false })}
+      <Tabs<Tab>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'slider', label: tabLabel('Kapak görselleri', dirty.slider) },
+          { value: 'announcement', label: tabLabel('Duyuru bandı', dirty.announcement) },
+          { value: 'lookbook', label: tabLabel('Marka bölümü', dirty.lookbook) },
+        ]}
       />
+
+      {loadError && (
+        <Notice tone="danger" title="İçerik yüklenemedi">
+          {loadError}. Sayfayı yenileyin.
+        </Notice>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-20 text-sm text-kul">
+          <Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor…
+        </div>
+      ) : (
+        !loadError && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+            {/* ---------------- Düzenleme alanı ---------------- */}
+            <div className="min-w-0 space-y-4">
+              {tab === 'slider' && (
+                <>
+                  {fromDefaults.slides && (
+                    <Notice>Henüz kapak kaydedilmemiş. Sitede aşağıdaki varsayılan kapak görünüyor.</Notice>
+                  )}
+                  {slides.length === 0 && (
+                    <Notice tone="warning">Kapak yok. Kaydederseniz sitede varsayılan kapak görünür.</Notice>
+                  )}
+                  {slides.map((slide, idx) => (
+                    <Card
+                      key={slide.key}
+                      title={
+                        <span className="flex items-center gap-2">
+                          Kapak {idx + 1}
+                          {!slide.media_url && <Badge tone="warning">Görsel gerekli</Badge>}
+                        </span>
+                      }
+                      actions={
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => setPreviewIndex(idx)} aria-pressed={previewIndex === idx}>
+                            {previewIndex === idx ? 'Önizlemede' : 'Önizle'}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => moveSlide(idx, -1)} disabled={idx === 0} aria-label={`Kapak ${idx + 1} yukarı taşı`}>
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => moveSlide(idx, 1)}
+                            disabled={idx === slides.length - 1}
+                            aria-label={`Kapak ${idx + 1} aşağı taşı`}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-rose-700 hover:bg-rose-50"
+                            onClick={() => {
+                              setSlides(prev => prev.filter((_, i) => i !== idx))
+                              setPreviewIndex(0)
+                            }}
+                            aria-label={`Kapak ${idx + 1} kaldır`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      }
+                    >
+                      <div className="space-y-4" onFocusCapture={() => setPreviewIndex(idx)}>
+                        <Field label="Görsel" hint="Yatay, en az 1600 px genişliğinde fotoğraf önerilir.">
+                          <ImageUploader
+                            bucket="content"
+                            folder="slider"
+                            existingImages={slide.media_url ? [slide.media_url] : []}
+                            maxFiles={1}
+                            onUploadSuccess={(urls: string[]) => updateSlide(idx, { media_url: urls[0] || '' })}
+                            onRemoveImage={() => updateSlide(idx, { media_url: '' })}
+                          />
+                        </Field>
+                        {isVideoUrl(slide.media_url) && (
+                          <Notice tone="warning">Ana sayfa kapağı şu an yalnızca fotoğraf gösterir. Video yerine fotoğraf yükleyin.</Notice>
+                        )}
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <TextInput label="Başlık" value={slide.title} onChange={e => updateSlide(idx, { title: e.target.value })} placeholder="ör. Yeni sezon geldi" />
+                          <TextInput
+                            label="Üst yazı"
+                            hint="Başlığın üstündeki küçük yazı."
+                            value={slide.subtitle}
+                            onChange={e => updateSlide(idx, { subtitle: e.target.value })}
+                            placeholder="ör. Sonbahar · Kış 2026"
+                          />
+                          <TextInput label="Buton yazısı" value={slide.button_text} onChange={e => updateSlide(idx, { button_text: e.target.value })} placeholder="ör. Koleksiyonu keşfet" />
+                          <TextInput
+                            label="Buton linki"
+                            value={slide.button_link}
+                            onChange={e => updateSlide(idx, { button_link: e.target.value })}
+                            placeholder="/urunler"
+                            hint="ör. /urunler ya da /kategori/elbise"
+                          />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                  <Button
+                    variant="secondary"
+                    icon={<Plus className="h-4 w-4" />}
+                    onClick={() => {
+                      setSlides(prev => [...prev, { key: newKey(), title: '', subtitle: '', button_text: 'Keşfet', button_link: '/urunler', media_url: '' }])
+                      setPreviewIndex(slides.length)
+                    }}
+                  >
+                    Kapak ekle
+                  </Button>
+                </>
+              )}
+
+              {tab === 'announcement' && (
+                <Card title="Duyurular" description="Sitenin en üstündeki bantta sırayla döner. Kısa tutun.">
+                  {fromDefaults.ann && (
+                    <div className="mb-4">
+                      <Notice>Henüz duyuru kaydedilmemiş. Sitede bu varsayılan duyurular görünüyor.</Notice>
+                    </div>
+                  )}
+                  <ol className="space-y-2">
+                    {announcements.map((text, idx) => (
+                      <li key={idx} className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-right text-xs text-kul">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={text}
+                          maxLength={90}
+                          aria-label={`Duyuru ${idx + 1}`}
+                          onChange={e => setAnnouncements(prev => prev.map((t, i) => (i === idx ? e.target.value : t)))}
+                          placeholder="ör. 1.000 TL üzeri ücretsiz kargo"
+                          className="h-10 min-w-0 flex-1 rounded-md border border-[#DCD6CF] bg-white px-3 text-sm text-ink placeholder:text-[#A8A19A] focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                        />
+                        <Button size="sm" variant="ghost" onClick={() => moveAnn(idx, -1)} disabled={idx === 0} aria-label={`Duyuru ${idx + 1} yukarı taşı`}>
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => moveAnn(idx, 1)}
+                          disabled={idx === announcements.length - 1}
+                          aria-label={`Duyuru ${idx + 1} aşağı taşı`}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-rose-700 hover:bg-rose-50"
+                          onClick={() => setAnnouncements(prev => prev.filter((_, i) => i !== idx))}
+                          aria-label={`Duyuru ${idx + 1} kaldır`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ol>
+                  {announcements.length === 0 && <p className="text-sm text-kul">Duyuru yok. Kaydederseniz sitede varsayılan duyurular görünür.</p>}
+                  <Button
+                    className="mt-4"
+                    variant="secondary"
+                    size="sm"
+                    icon={<Plus className="h-4 w-4" />}
+                    onClick={() => setAnnouncements(prev => [...prev, ''])}
+                  >
+                    Duyuru ekle
+                  </Button>
+                </Card>
+              )}
+
+              {tab === 'lookbook' && (
+                <Card title="Marka bölümü" description="Ana sayfanın altındaki mürdüm renkli tanıtım alanı.">
+                  {fromDefaults.lb && (
+                    <div className="mb-4">
+                      <Notice>Henüz kaydedilmemiş. Sitede bu varsayılan içerik görünüyor.</Notice>
+                    </div>
+                  )}
+                  <div className="space-y-4">
+                    <Field label="Görsel" required hint="Dikey (4:5) fotoğraf önerilir.">
+                      <ImageUploader
+                        bucket="content"
+                        folder="lookbook"
+                        existingImages={lookbook.media_url ? [lookbook.media_url] : []}
+                        maxFiles={1}
+                        onUploadSuccess={(urls: string[]) => setLookbook(l => ({ ...l, media_url: urls[0] || '' }))}
+                        onRemoveImage={() => setLookbook(l => ({ ...l, media_url: '' }))}
+                      />
+                    </Field>
+                    {isVideoUrl(lookbook.media_url) && (
+                      <Notice tone="warning">Bu bölüm şu an yalnızca fotoğraf gösterir. Video yerine fotoğraf yükleyin.</Notice>
+                    )}
+                    <TextInput label="Başlık" required value={lookbook.title} onChange={e => setLookbook(l => ({ ...l, title: e.target.value }))} />
+                    <TextArea label="Metin" rows={5} value={lookbook.description} onChange={e => setLookbook(l => ({ ...l, description: e.target.value }))} />
+                    <TextInput
+                      label="Link"
+                      hint={'"Hikayemiz" yazısına tıklayınca açılan sayfa.'}
+                      value={lookbook.button_link}
+                      onChange={e => setLookbook(l => ({ ...l, button_link: e.target.value }))}
+                      placeholder="/hakkimizda"
+                    />
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            {/* ---------------- Önizleme ---------------- */}
+            <aside className="lg:sticky lg:top-6 lg:self-start">
+              <p className="mb-2 text-[13px] font-medium text-ink">Sitede görünümü</p>
+              {tab === 'slider' && <HeroPreview slide={previewSlide} index={Math.min(previewIndex, slides.length - 1)} total={slides.length} />}
+              {tab === 'announcement' && <AnnouncementPreview messages={announcements} />}
+              {tab === 'lookbook' && <LookbookPreview data={lookbook} />}
+              <p className="mt-2 text-xs text-kul">Küçültülmüş önizleme. Kaydettikten sonra sitede görünür.</p>
+            </aside>
+          </div>
+        )
+      )}
+
+      {!loading && !loadError && (
+        <StickyActions
+          note={
+            currentDirty ? (
+              <span className="flex items-center gap-2 text-ink">
+                <span aria-hidden className="h-2 w-2 rounded-full bg-murdum" /> Kaydedilmemiş değişiklikler var
+              </span>
+            ) : (
+              'Tüm değişiklikler kaydedildi'
+            )
+          }
+        >
+          {currentDirty && (
+            <Button variant="ghost" onClick={revert} disabled={saving !== null}>
+              Geri al
+            </Button>
+          )}
+          <Button onClick={saveCurrent} loading={saving === tab} disabled={(!currentDirty && !notInDb) || saving !== null}>
+            {saveLabel}
+          </Button>
+        </StickyActions>
+      )}
     </div>
   )
 }

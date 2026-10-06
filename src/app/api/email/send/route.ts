@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     await adminClient.from('email_logs' as any).insert({
       recipient_email: Array.isArray(to) ? to.join(', ') : to,
       subject,
-      status: result.id ? 'sent' : 'failed',
+      status: result.data?.id ? 'sent' : 'failed',
       sent_at: new Date().toISOString(),
     });
 
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, id: result.id });
+    return NextResponse.json({ success: true, id: result.data?.id });
   } catch (error) {
     console.error('Email send endpoint error:', error);
     return NextResponse.json({ error: 'E-posta gönderilirken bir hata oluştu' }, { status: 500 });

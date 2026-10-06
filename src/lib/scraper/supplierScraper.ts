@@ -97,6 +97,124 @@ function parseTurkishPrice(val: any): number {
 /**
  * Open-Source Cheerio Supplier HTML & JSON-LD Scraper for Wholesalers
  */
+
+/* ------------------------------------------------------------------ */
+/* Ticimax altyapılı toptancı siteleri (ör. fame.com.tr)                */
+/* Ürün verisi sayfadaki "var productDetailModel = {...}" nesnesindedir. */
+/* ------------------------------------------------------------------ */
+
+function extractJsonAssignment(html: string, marker: string): Record<string, any> | null {
+  const start = html.indexOf(marker)
+  if (start === -1) return null
+  const i = start + marker.length
+  let depth = 0
+  let inStr = false
+  let e = i
+  for (; e < html.length; e++) {
+    const c = html[e]
+    if (inStr) {
+      if (c === '\\') e++
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) break
+    }
+  }
+  try {
+    return JSON.parse(html.slice(i, e + 1))
+  } catch {
+    return null
+  }
+}
+
+const titleCaseTr = (v: string) =>
+  v
+    .toLocaleLowerCase('tr')
+    .split(' ')
+    .map(w => w.charAt(0).toLocaleUpperCase('tr') + w.slice(1))
+    .join(' ')
+
+function parseTicimax(html: string, url: string, domain: string): ScrapedProductData | null {
+  const m = extractJsonAssignment(html, 'var productDetailModel = ')
+  if (!m || !m.productName) return null
+  const products: any[] = Array.isArray(m.products) ? m.products : []
+  const first = products[0] || {}
+
+  // Toptancı fiyatları genelde KDV hariç gösterir; maliyet KDV dahil hesaplanmalı
+  const net = Number(first.urunSepetFiyati ?? first.indirimliFiyati ?? first.satisFiyati ?? m.productPrice ?? 0)
+  const vat = Number(first.urunSepetFiyatiKDV ?? 0)
+  const vatIncluded = first.kdvDahil === true
+  const priceWithVat = vatIncluded ? net : net + vat
+
+  const variants: any[] = Array.isArray(m.productVariantData) ? m.productVariantData : []
+  const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))]
+  const colors = uniq(variants.filter(v => /renk/i.test(v.ekSecenekTipiTanim || '')).map(v => titleCaseTr(String(v.tanim || '').trim())))
+  const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', 'STD', 'STANDART']
+  const sizeRank = (v: string) => {
+    const i = SIZE_ORDER.indexOf(v.toLocaleUpperCase('tr'))
+    return i >= 0 ? i : 100 + (parseFloat(v) || 0)
+  }
+  const sizes = uniq(variants.filter(v => /beden/i.test(v.ekSecenekTipiTanim || '')).map(v => String(v.tanim || '').trim())).sort(
+    (a, b) => sizeRank(a) - sizeRank(b),
+  )
+
+  const tech: Record<string, string> = {}
+  for (const t of Array.isArray(m.customTechnicalDetails) ? m.customTechnicalDetails : []) {
+    const values = (t.degerler || []).map((d: any) => d.tanim).filter(Boolean).join(', ')
+    if (t.tanim && values) tech[t.tanim] = values
+  }
+  const fabricContent = tech['Kumaş İçeriği'] || ''
+  const fabricName = tech['Kumaş Adı'] || ''
+  const fabric = [fabricName, fabricContent].filter(Boolean).join(' · ')
+
+  const images: string[] = uniq(
+    (Array.isArray(m.productImages) ? m.productImages : [])
+      .sort((a: any, b: any) => (a.imageOrder ?? 0) - (b.imageOrder ?? 0))
+      .map((im: any) => String(im.bigImagePath || im.imagePath || '')),
+  )
+  const breadcrumb: any[] = Array.isArray(m.breadCrumb) ? m.breadCrumb : []
+  // En özel kategori: başka bir kategorinin üst kategorisi olmayan kayıt ("Üst Giyim" değil "Elbise")
+  const parentIds = new Set(breadcrumb.map(b => b.pid))
+  const leaf = breadcrumb.find(b => !parentIds.has(b.id)) || breadcrumb[0]
+  const category = leaf ? String(leaf.tanim || '') : ''
+  const totalStock = Number(m.totalStockAmount ?? products.reduce((a, p) => a + Number(p.stokAdedi || 0), 0))
+
+  return {
+    brand_name: String(m.brandName || formatBrandFromDomain(domain)),
+    title: String(m.productName).trim(),
+    domain,
+    product_url: url,
+    price: Math.round(priceWithVat * 100) / 100,
+    stock_status: totalStock > 0 ? 'stokta_var' : 'stokta_yok',
+    color: colors.join(', '),
+    fabric,
+    sizes: sizes.join(', '),
+    sku: String(m.stockCode || first.stokKodu || ''),
+    description: String(m.productShortDescription || category || '').trim(),
+    image_url: images[0] || String(first.spotResimBuyukYolu || ''),
+    raw_metadata: {
+      platform: 'ticimax',
+      images,
+      category,
+      colors,
+      sizes,
+      fabric_name: fabricName,
+      fabric_content: fabricContent,
+      technical: tech,
+      price_without_vat: Math.round(net * 100) / 100,
+      vat_rate: Number(first.kdvOrani ?? 0),
+      price_includes_vat: true,
+      assortment: tech['Asorti Bilgisi'] || null,
+      season: tech['Sezon'] || null,
+      total_stock: totalStock,
+    },
+  }
+}
+
 export async function scrapeSupplierProduct(targetUrl: string): Promise<ScrapedProductData> {
   const url = targetUrl.trim();
   const domain = extractDomain(url);
@@ -123,6 +241,10 @@ export async function scrapeSupplierProduct(targetUrl: string): Promise<ScrapedP
     console.error(`Fetch failed for ${url}:`, err);
     throw new Error(`Toptancı sitesine bağlanılamadı: ${err.message}`);
   }
+
+  // Ticimax sitelerinde zengin ürün modeli var: renk, beden, kumaş, KDV dahil fiyat, tüm görseller
+  const ticimax = parseTicimax(html, url, domain);
+  if (ticimax) return ticimax;
 
   const $ = cheerio.load(html);
 
@@ -207,6 +329,4 @@ export async function scrapeSupplierProduct(targetUrl: string): Promise<ScrapedP
   };
 }
 
-// Rakip/piyasa fiyat araştırması marketResearch.ts içinde (gerçek arama sonuçları).
-export { researchMarketPrices as scrapeCompetitorMarketplaces } from './marketResearch';
-export type { CompetitorItem, CompetitorAnalysisResult } from './marketResearch';
+// Piyasa fiyat araştırması: src/lib/research/engine.ts

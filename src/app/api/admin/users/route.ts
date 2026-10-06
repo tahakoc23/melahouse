@@ -66,6 +66,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Kullanıcı ID zorunludur." }, { status: 400 });
     }
 
+    // Admin kendi yetkisini kaldıramaz (panele erişimi kaybetmesin)
+    if (userId === guard.user.id && role && role !== 'admin') {
+      return NextResponse.json({ error: "Kendi admin yetkinizi kaldıramazsınız." }, { status: 400 });
+    }
+
     // Call SECURITY DEFINER RPC admin_update_user
     const { data, error } = await adminClient.rpc("admin_update_user", {
       target_user_id: userId,
@@ -100,6 +105,10 @@ export async function DELETE(request: Request) {
 
     if (!userId) {
       return NextResponse.json({ error: "Kullanıcı ID (userId) parametresi gereklidir." }, { status: 400 });
+    }
+
+    if (userId === guard.user.id) {
+      return NextResponse.json({ error: "Kendi hesabınızı silemezsiniz." }, { status: 400 });
     }
 
     // Call SECURITY DEFINER RPC admin_delete_user
