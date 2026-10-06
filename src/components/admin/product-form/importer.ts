@@ -96,10 +96,18 @@ export function applyImport(
   src: ImportSource,
   categories: CategoryRow[],
   opts: { slugTouched: boolean; mode: 'create' | 'edit' },
-): { form: ProductFormState; filled: string[]; kept: string[]; cost: ImportedCostInfo | null; originalTitle: string } {
+): {
+  form: ProductFormState
+  filled: string[]
+  kept: string[]
+  missing: string[]
+  cost: ImportedCostInfo | null
+  originalTitle: string
+} {
   const next: ProductFormState = { ...form }
   const filled: string[] = []
   const kept: string[] = []
+  const missing: string[] = []
   const meta = (src.raw_metadata || {}) as Record<string, unknown>
   const title = meaningful(src.title)
 
@@ -207,6 +215,8 @@ export function applyImport(
       next.cost = formatTurkishPrice(cost)
       filled.push('alış fiyatı')
     } else if (parseTurkishPrice(next.cost) !== cost) kept.push('alış fiyatı')
+  } else if (!next.cost.trim()) {
+    missing.push('alış fiyatı')
   }
 
   // Görseller: raw_metadata.images (sıralı) ya da tek image_url; mevcutların sonuna eklenir
@@ -219,5 +229,5 @@ export function applyImport(
     filled.push(fresh.length > 1 ? `${fresh.length} görsel` : 'görsel')
   }
 
-  return { form: next, filled, kept, cost: costInfo, originalTitle: title }
+  return { form: next, filled, kept, missing, cost: costInfo, originalTitle: title }
 }

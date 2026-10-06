@@ -144,11 +144,33 @@ function parseTicimax(html: string, url: string, domain: string): ScrapedProduct
   const products: any[] = Array.isArray(m.products) ? m.products : []
   const first = products[0] || {}
 
-  // Toptancı fiyatları genelde KDV hariç gösterir; maliyet KDV dahil hesaplanmalı
-  const net = Number(first.urunSepetFiyati ?? first.indirimliFiyati ?? first.satisFiyati ?? m.productPrice ?? 0)
-  const vat = Number(first.urunSepetFiyatiKDV ?? 0)
+  // Toptancı fiyatları genelde KDV hariç gösterir; maliyet KDV dahil hesaplanmalı.
+  // Sunucu (yurt dışı IP) isteklerinde bazı alanlar 0 ya da boş gelebiliyor: ilk pozitif değeri al.
+  const pos = (...vals: unknown[]) => {
+    for (const v of vals) {
+      const n = Number(v)
+      if (Number.isFinite(n) && n > 0) return n
+    }
+    return 0
+  }
+  const vatRate = pos(first.kdvOrani, m.productVatRate, m.kdvOrani)
+  let net = pos(first.urunSepetFiyati, first.indirimliFiyati, first.satisFiyati, m.productPrice)
+  const vat = pos(first.urunSepetFiyatiKDV, first.indirimliKDV, first.satisKDV)
   const vatIncluded = first.kdvDahil === true
-  const priceWithVat = vatIncluded ? net : net + vat
+  let priceWithVat = pos(m.productPriceKDVIncluded) || (net ? (vatIncluded ? net : net + (vat || (net * vatRate) / 100)) : 0)
+  let priceSource = priceWithVat ? 'productDetailModel' : ''
+  if (!priceWithVat) {
+    // Son çare: JSON-LD Offer. Ticimax burada vitrindeki fiyatı (KDV hariç) yayınlar;
+    // oran okunamadıysa giyimdeki %10 KDV varsayılır ve kaynakta belirtilir.
+    const ld = html.match(/"@type"\s*:\s*"Offer"[\s\S]{0,400}?"price"\s*:\s*"?([\d.,]+)"?/)
+    const ldPrice = ld ? parseFloat(ld[1].replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')) : 0
+    if (ldPrice > 0) {
+      const rate = vatRate || 10
+      net = ldPrice
+      priceWithVat = vatIncluded ? ldPrice : ldPrice * (1 + rate / 100)
+      priceSource = vatRate ? 'json-ld' : 'json-ld (KDV %10 varsayıldı)'
+    }
+  }
 
   const variants: any[] = Array.isArray(m.productVariantData) ? m.productVariantData : []
   const uniq = (arr: string[]) => [...new Set(arr.filter(Boolean))]
@@ -205,9 +227,13 @@ function parseTicimax(html: string, url: string, domain: string): ScrapedProduct
       fabric_name: fabricName,
       fabric_content: fabricContent,
       technical: tech,
-      price_without_vat: Math.round(net * 100) / 100,
-      vat_rate: Number(first.kdvOrani ?? 0),
+      price_without_vat: net ? Math.round(net * 100) / 100 : null,
+      vat_rate: vatRate || (priceSource.startsWith('json-ld') ? 10 : null),
       price_includes_vat: true,
+      price_source: priceSource || null,
+      price_debug: priceWithVat
+        ? undefined
+        : { products: products.length, productPrice: m.productPrice ?? null, currency: m.productCurrency ?? null },
       assortment: tech['Asorti Bilgisi'] || null,
       season: tech['Sezon'] || null,
       total_stock: totalStock,

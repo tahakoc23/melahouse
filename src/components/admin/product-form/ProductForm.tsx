@@ -122,7 +122,7 @@ export default function ProductForm({ mode, productId, fromSupplierId }: Product
             }
             const r = applyImport(start, row as ImportSource, cats, { slugTouched: false, mode: 'create' })
             setForm(r.form)
-            setImportReport({ filled: r.filled, kept: r.kept })
+            setImportReport({ filled: r.filled, kept: r.kept, missing: r.missing })
             setImportedCost(r.cost)
             const supName = sups.find(s => s.id === row.supplier_id)?.name
             setSourceLabel(
@@ -239,7 +239,7 @@ export default function ProductForm({ mode, productId, fromSupplierId }: Product
       ...r.form,
       supplier: { ...r.form.supplier, url, scraped: data as ProductFormState['supplier']['scraped'] },
     })
-    setImportReport({ filled: r.filled, kept: r.kept })
+    setImportReport({ filled: r.filled, kept: r.kept, missing: r.missing })
     if (r.cost) setImportedCost(r.cost)
     productToast.success(r.filled.length ? 'Toptancı bilgileri forma aktarıldı.' : 'Sayfada yeni bilgi bulunamadı.')
   }

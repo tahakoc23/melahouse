@@ -12,6 +12,8 @@ const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).jo
 export interface ImportReport {
   filled: string[]
   kept: string[]
+  /** Toptancı sayfasında okunamayan önemli alanlar (ör. alış fiyatı) */
+  missing?: string[]
 }
 
 /** Alan adından toptancıyı bulur (www. ve alt alan adları yok sayılır) */
@@ -164,6 +166,9 @@ export default function SupplierImportCard({
               {report.filled.length > 0 && <p>Doldurulan: {report.filled.join(', ')}.</p>}
               {report.kept.length > 0 && <p>Dokunulmayan (formda zaten dolu): {report.kept.join(', ')}.</p>}
               {report.filled.length === 0 && report.kept.length === 0 && <p>Sayfada kullanılabilir bilgi bulunamadı.</p>}
+              {report.missing && report.missing.length > 0 && (
+                <p className="font-medium text-[#8a5a12]">Okunamadı, elle yazın: {report.missing.join(', ')}.</p>
+              )}
             </Notice>
           )}
 
