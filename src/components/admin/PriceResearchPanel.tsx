@@ -169,24 +169,32 @@ export default function PriceResearchPanel({
               ))}
               {!result.plan.category && <Badge tone="warning">Ürün tipi anlaşılamadı: kategori seçin</Badge>}
             </div>
-            <form
-              className="flex flex-col gap-2 sm:flex-row sm:items-end"
-              onSubmit={e => {
-                e.preventDefault()
-                run(true)
-              }}
-            >
+            {/* Panel ürün formunun içinde kullanılıyor: iç içe <form> geçersiz olduğundan div + Enter */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <TextInput
                 className="flex-1"
                 label="Aranan ifade"
                 hint="Sonuçlar beklediğiniz gibi değilse ifadeyi düzenleyip tekrar arayın."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    if (!loading) run(true)
+                  }
+                }}
               />
-              <Button type="submit" variant="secondary" loading={loading} icon={<RotateCcw className="h-4 w-4" />} className="sm:mb-[22px]">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => run(true)}
+                loading={loading}
+                icon={<RotateCcw className="h-4 w-4" />}
+                className="sm:mb-[22px]"
+              >
                 Tekrar ara
               </Button>
-            </form>
+            </div>
           </div>
         )}
 

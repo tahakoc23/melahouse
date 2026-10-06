@@ -205,8 +205,8 @@ export interface DetailDef {
 }
 
 export const DETAILS: DetailDef[] = [
-  { key: 'mini', label: 'Mini', roots: ['mini', 'kisa elbise', 'mini elbise'], group: 'boy' },
-  { key: 'midi', label: 'Midi', roots: ['midi'], group: 'boy' },
+  { key: 'mini', label: 'Mini', roots: ['mini', 'kisa elbise', 'mini elbise', 'diz ustu'], group: 'boy' },
+  { key: 'midi', label: 'Midi', roots: ['midi', 'diz boyu', 'diz alti'], group: 'boy' },
   { key: 'maxi', label: 'Maxi', roots: ['maxi', 'maksi', 'uzun elbise', 'uzun abiye', 'uzun gomlek elbise', 'uzun boy'], group: 'boy' },
   { key: 'askili', label: 'Askılı', roots: ['askili', 'ip askili'], group: 'kol' },
   { key: 'straplez', label: 'Straplez', roots: ['straplez', 'strapless'], group: 'kol' },
