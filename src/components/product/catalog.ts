@@ -19,6 +19,8 @@ export const CATEGORY_TREE: CategoryNode[] = [
     slug: 'ust-giyim',
     subcategories: [
       { name: 'Elbise', slug: 'elbise' },
+      { name: 'Triko & Kazak', slug: 'triko-kazak' },
+      { name: 'Hırka', slug: 'hirka' },
       { name: 'Gömlek', slug: 'gomlek' },
       { name: 'T-Shirt', slug: 't-shirt' },
       { name: 'Crop', slug: 'crop' },

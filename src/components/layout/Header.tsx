@@ -21,6 +21,8 @@ const DEFAULT_NAVIGATION_MENUS = [
     path: '/kategori/ust-giyim',
     subcategories: [
       { id: 'u1', title: 'Elbise', path: '/kategori/elbise' },
+      { id: 'u7', title: 'Triko & Kazak', path: '/kategori/triko-kazak' },
+      { id: 'u8', title: 'Hırka', path: '/kategori/hirka' },
       { id: 'u2', title: 'Gömlek', path: '/kategori/gomlek' },
       { id: 'u3', title: 'T-Shirt', path: '/kategori/t-shirt' },
       { id: 'u4', title: 'Crop', path: '/kategori/crop' },
