@@ -17,8 +17,8 @@ import {
   type DetailDef,
   type FabricDef,
 } from './dictionary'
-import { DIRECT_SOURCES, LINGERIE_ONLY, googleShopping, manualLinks, type RawItem, type Source, type SourceQuery } from './sources'
-import { TIER_MAX_MULTIPLIER, TIER_MIN_MULTIPLIER, computeStats, suggestPrices, type PriceStats, type PriceSuggestion, type Segment } from './stats'
+import { BRAND_SOURCES, LINGERIE_ONLY, manualLinks, type RawItem, type Source, type SourceQuery } from './sources'
+import { SEGMENT_ORDER, computeStats, suggestPrices, type PriceStats, type PriceSuggestion, type Segment } from './stats'
 
 export interface ResearchAttributes {
   name?: string
@@ -40,6 +40,8 @@ export interface ResearchPlan {
 
 export interface ResearchItem {
   id: string
+  /** Marka kaynağının kimliği (BrandReport.id) */
+  brandId: string
   store: string
   segment: Segment
   title: string
@@ -49,18 +51,29 @@ export interface ResearchItem {
   image?: string
   /** 0-100 uyum puanı */
   score: number
-  /** Varsayılan olarak fiyat hesabına dahil mi */
-  included: boolean
+  /** Aranan ürünle karşılaştırılabilir mi (çelişki yok, puan eşiğin üstünde) */
+  eligible: boolean
+  /** Birebir değil ama yakın model (aynı ürün tipi ve renk; boy/yaka/kol farklı olabilir) */
+  near: boolean
   matched: string[]
   conflicts: string[]
 }
 
-export interface SourceReport {
+export interface BrandReport {
   id: string
   name: string
+  segment: Segment
   ok: boolean
+  /** Sitede bulunan ürün sayısı */
   found: number
-  relevant: number
+  /** Karşılaştırılabilir ürün sayısı */
+  eligible: number
+  /** Markayı temsil eden (en uygun) ürün */
+  pickId?: string
+  /** Markada birebir eşleşme yok, yakın model alındı */
+  approximate: boolean
+  /** Varsayılan 10 markaya girdi mi (girmeyenler yedek) */
+  selected: boolean
   searchUrl: string
   message?: string
 }
@@ -68,13 +81,17 @@ export interface SourceReport {
 export interface ResearchResult {
   plan: ResearchPlan
   items: ResearchItem[]
+  brands: BrandReport[]
   stats: PriceStats
   suggestions: PriceSuggestion[]
-  sources: SourceReport[]
   manualLinks: { name: string; url: string }[]
-  googleEnabled: boolean
   searchedAt: string
 }
+
+/** Araştırma sonucunda fiyatı alınan marka sayısı */
+export const BRAND_TARGET = 10
+/** Segment sırası: dengeli seçimde önce orta, sonra alt ve premium */
+const PICK_ORDER: Segment[] = ['orta', 'alt', 'premium']
 
 const LINGERIE_CATEGORIES = new Set(['gecelik', 'pijama', 'sabahlik', 'sutyen', 'kulot', 'kombinezon', 'body'])
 const MIN_PRICE = 50
@@ -147,18 +164,26 @@ export function buildPlan(attrs: ResearchAttributes, queryOverride?: string): Re
 /* Uyum puanı                                                          */
 /* ------------------------------------------------------------------ */
 
-function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included: boolean; matched: string[]; conflicts: string[] } {
-  const toks = tokens(item.title)
+function scoreItem(
+  item: RawItem,
+  plan: ResearchPlan,
+): { score: number; included: boolean; near: boolean; matched: string[]; conflicts: string[] } {
+  // "Erkek yaka" bir gömlek yaka türüdür; erkek ürünü sanılmasın
+  const toks = tokens(item.title.replace(/erkek\s+yaka/gi, 'gömlek yaka'))
   const queryToks = tokens(`${plan.query.full} ${plan.text}`)
   const matched: string[] = []
   const conflicts: string[] = []
   let hardExclude = false
+  // Bambaşka ürün (erkek, çocuk, abiye, farklı ürün tipi...): yakın model olarak bile alınmaz
+  let different = false
+  let colorConflict = false
   let score = 0
 
   for (const rule of EXCLUDE_RULES) {
     if (hasAny(toks, rule.roots) && !(rule.unlessQueryHas && hasAny(queryToks, rule.unlessQueryHas))) {
       conflicts.push(rule.reason)
       hardExclude = true
+      different = true
     }
   }
 
@@ -172,6 +197,7 @@ function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included
     } else {
       conflicts.push('Ürün tipi farklı')
       hardExclude = true
+      different = true
     }
   } else {
     score += 25
@@ -206,6 +232,7 @@ function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included
       matched.push(def.label)
     } else if (families.size > 0) {
       score -= 30
+      colorConflict = true
       const other = COLORS.find(c => c.family !== def.family && hasAny(toks, c.roots))
       conflicts.push(`Renk farklı${other ? ` (${other.label})` : ''}`)
     } else {
@@ -233,6 +260,8 @@ function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included
       if (rival) {
         conflicts.push(`${def.label} değil, ${rival.label.toLocaleLowerCase('tr')}`)
         hardExclude = true
+        // Yakın modeller arasında daha az farklı olan öne geçsin
+        score -= 8
       }
     }
   }
@@ -240,12 +269,57 @@ function scoreItem(item: RawItem, plan: ResearchPlan): { score: number; included
   if (!plan.details.length) score += 10
 
   score = Math.max(0, Math.min(100, Math.round(score)))
-  return { score, included: !hardExclude && score >= INCLUDE_THRESHOLD, matched, conflicts }
+  return {
+    score,
+    included: !hardExclude && score >= INCLUDE_THRESHOLD,
+    // Birebir eşleşme yoksa markayı temsil edebilecek yakın model: aynı ürün tipi ve renk, farklı boy/yaka/kol olabilir
+    near: !different && !colorConflict,
+    matched,
+    conflicts,
+  }
 }
 
 /* ------------------------------------------------------------------ */
 /* Ana akış                                                            */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Markanın temsilci ürünü: en uyumlu ürün. Puanı en yüksek olana 5 puan yakın birden çok ürün
+ * varsa aralarından fiyatı ortadaki seçilir (tek bir indirimli ya da özel ürün markayı temsil etmesin).
+ */
+function pickRepresentative(items: ResearchItem[]): ResearchItem | undefined {
+  let eligible = items.filter(i => i.eligible)
+  // Birebir eşleşme yoksa markanın en yakın modeli (her markadan bir fiyat alınabilsin)
+  if (!eligible.length) eligible = items.filter(i => i.near)
+  if (!eligible.length) return undefined
+  const top = Math.max(...eligible.map(i => i.score))
+  const close = eligible.filter(i => i.score >= top - 5).sort((a, b) => a.price - b.price)
+  return close[Math.floor((close.length - 1) / 2)]
+}
+
+/**
+ * 10 markayı segmentlere dengeli dağıtır: orta → alt → premium sırasıyla, her turda o segmentin
+ * en uyumlu markası seçilir. Bir segmentte marka kalmazsa diğerlerinden devam edilir.
+ */
+function selectBalanced(brands: { id: string; segment: Segment; score: number }[], target: number): Set<string> {
+  const queues = new Map<Segment, { id: string; score: number }[]>()
+  for (const seg of SEGMENT_ORDER) {
+    queues.set(seg, brands.filter(b => b.segment === seg).sort((a, b) => b.score - a.score))
+  }
+  const chosen = new Set<string>()
+  while (chosen.size < target) {
+    let added = false
+    for (const seg of PICK_ORDER) {
+      const next = queues.get(seg)!.shift()
+      if (next && chosen.size < target) {
+        chosen.add(next.id)
+        added = true
+      }
+    }
+    if (!added) break
+  }
+  return chosen
+}
 
 export async function runResearch(
   attrs: ResearchAttributes,
@@ -253,93 +327,87 @@ export async function runResearch(
   costPrice?: number,
 ): Promise<ResearchResult> {
   const plan = buildPlan(attrs, queryOverride)
-  const googleEnabled = !!process.env.SERPAPI_API_KEY
   const lingerie = plan.category ? LINGERIE_CATEGORIES.has(plan.category.key) : false
-
-  const sources: Source[] = [
-    ...(googleEnabled ? [googleShopping] : []),
-    ...DIRECT_SOURCES.filter(s => !LINGERIE_ONLY.has(s.id) || lingerie),
-  ]
+  const sources: Source[] = BRAND_SOURCES.filter(s => !LINGERIE_ONLY.has(s.id) || lingerie)
 
   const settled = await Promise.allSettled(sources.map(s => s.run(plan.query)))
 
   const items: ResearchItem[] = []
-  const reports: SourceReport[] = sources.map((src, i) => {
+  const reports: BrandReport[] = sources.map((src, i) => {
     const r = settled[i]
+    const base = {
+      id: src.id,
+      name: src.name,
+      segment: src.segment,
+      searchUrl: src.searchUrl(plan.query),
+      selected: false,
+      approximate: false,
+    }
     if (r.status === 'rejected') {
-      return {
-        id: src.id,
-        name: src.name,
-        ok: false,
-        found: 0,
-        relevant: 0,
-        searchUrl: src.searchUrl(plan.query),
-        message: r.reason instanceof Error ? r.reason.message : 'erişilemedi',
-      }
+      return { ...base, ok: false, found: 0, eligible: 0, message: r.reason instanceof Error ? r.reason.message : 'erişilemedi' }
     }
     const seen = new Set<string>()
-    let relevant = 0
-    for (const raw of r.value) {
+    const own: ResearchItem[] = []
+    for (const raw of r.value as RawItem[]) {
       if (!raw.title || !raw.url || !(raw.price >= MIN_PRICE && raw.price <= MAX_PRICE)) continue
       const dedupeKey = `${normalizeTr(raw.title)}|${Math.round(raw.price)}`
       if (seen.has(raw.url) || seen.has(dedupeKey)) continue
       seen.add(raw.url)
       seen.add(dedupeKey)
       const s = scoreItem(raw, plan)
-      // Fiyat segmenti: alışa göre çok ucuz ya da lüks ürünler karşılaştırılabilir değildir
-      if (costPrice && costPrice > 0 && s.included) {
-        if (raw.price < costPrice * TIER_MIN_MULTIPLIER) {
-          s.included = false
-          s.conflicts.push('Daha ucuz segment')
-        } else if (raw.price > costPrice * TIER_MAX_MULTIPLIER) {
-          s.included = false
-          s.conflicts.push('Lüks segment')
-        }
-      }
-      if (s.included) relevant++
-      items.push({
-        id: `${src.id}:${items.length}`,
-        store: raw.store,
-        segment: raw.segment,
+      own.push({
+        id: `${src.id}:${own.length}`,
+        brandId: src.id,
+        store: src.name,
+        segment: src.segment,
         title: raw.title.replace(/\s+/g, ' ').trim(),
         url: raw.url,
         price: Math.round(raw.price * 100) / 100,
         originalPrice: raw.originalPrice,
         image: raw.image,
-        ...s,
+        score: s.score,
+        eligible: s.included,
+        near: s.near,
+        matched: s.matched,
+        conflicts: s.conflicts,
       })
     }
+    // Markadan en uyumlu 12 ürün yeter (ekranda alternatif olarak gösterilir)
+    own.sort(
+      (a, b) => Number(b.eligible) - Number(a.eligible) || Number(b.near) - Number(a.near) || b.score - a.score || a.price - b.price,
+    )
+    const kept = own.slice(0, 12)
+    items.push(...kept)
+    const pick = pickRepresentative(kept)
     return {
-      id: src.id,
-      name: src.name,
+      ...base,
       ok: true,
       found: r.value.length,
-      relevant,
-      searchUrl: src.searchUrl(plan.query),
-      message: r.value.length === 0 ? 'sonuç yok' : undefined,
+      eligible: kept.filter(i => i.eligible).length,
+      pickId: pick?.id,
+      approximate: !!pick && !pick.eligible,
+      message: r.value.length === 0 ? 'sonuç yok' : !pick ? 'benzer ürün yok' : undefined,
     }
   })
 
-  // Her mağazadan en fazla 12 ürün (en uyumlu olanlar); toplamda uyuma göre sıralı
-  const perStore = new Map<string, number>()
-  const limited = items
-    .sort((a, b) => b.score - a.score || a.price - b.price)
-    .filter(it => {
-      const n = perStore.get(it.store) || 0
-      if (n >= 12) return false
-      perStore.set(it.store, n + 1)
-      return true
-    })
+  const picks = reports
+    .filter(b => b.pickId)
+    // Birebir eşleşen markalar yakın modelli markalardan önce seçilir
+    .map(b => ({ id: b.id, segment: b.segment, score: (b.approximate ? 0 : 100) + items.find(i => i.id === b.pickId)!.score }))
+  const chosen = selectBalanced(picks, BRAND_TARGET)
+  for (const b of reports) b.selected = chosen.has(b.id)
 
-  const stats = computeStats(limited, { costKnown: !!(costPrice && costPrice > 0) })
+  const priced = reports
+    .filter(b => b.selected && b.pickId)
+    .map(b => ({ ...items.find(i => i.id === b.pickId)!, included: true }))
+  const stats = computeStats(priced)
   return {
     plan,
-    items: limited,
+    items,
+    brands: reports,
     stats,
     suggestions: suggestPrices(stats, costPrice),
-    sources: reports,
     manualLinks: manualLinks(plan.query),
-    googleEnabled,
     searchedAt: new Date().toISOString(),
   }
 }

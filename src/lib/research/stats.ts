@@ -1,19 +1,19 @@
 /**
  * Fiyat istatistikleri. Hem sunucuda hem tarayıcıda kullanılır
- * (admin bir ürünü dahil/hariç ettiğinde sonuçlar anında yeniden hesaplanır).
+ * (admin bir markayı hesaptan çıkardığında ya da başka ürününü seçtiğinde sonuçlar anında yeniden hesaplanır).
+ *
+ * Araştırma her markadan tek bir fiyat alır; markalar alt, orta ve premium segmentlere dağılır.
+ * Segment farkı bilerek istendiği için uç değer kırpılmaz; segment ortalamaları ayrıca gösterilir.
  */
 
-export type Segment = 'pazaryeri' | 'marka' | 'premium'
+/** Marka segmenti: alt (bütçe), orta, premium */
+export type Segment = 'alt' | 'orta' | 'premium'
 
-/** Alış fiyatı biliniyorsa karşılaştırılabilir fiyat bandı: alışın 1,2 – 5 katı */
-export const TIER_MIN_MULTIPLIER = 1.2
-export const TIER_MAX_MULTIPLIER = 5
-
-export const SEGMENT_ORDER: Segment[] = ['pazaryeri', 'marka', 'premium']
+export const SEGMENT_ORDER: Segment[] = ['alt', 'orta', 'premium']
 export const SEGMENT_INFO: Record<Segment, { label: string; hint: string }> = {
-  pazaryeri: { label: 'Pazaryerleri', hint: 'Trendyol, Hepsiburada, n11 satıcıları' },
-  marka: { label: 'Hızlı moda', hint: 'LC Waikiki, Koton, Penti vb.' },
-  premium: { label: 'Premium & lüks', hint: 'Network, İpekyol, Beymen vb.' },
+  alt: { label: 'Alt segment', hint: 'LC Waikiki, Koton, Colin’s' },
+  orta: { label: 'Orta segment', hint: 'Mudo, Setre, Nocturne, Yargıcı' },
+  premium: { label: 'Premium', hint: 'İpekyol, Network, Roman, Sarar' },
 }
 
 export interface PricedItem {
@@ -26,6 +26,7 @@ export interface SegmentStat {
   segment: Segment
   label: string
   count: number
+  average: number
   median: number
   min: number
   max: number
@@ -37,8 +38,6 @@ export interface PriceStats {
   average: number
   min: number
   max: number
-  p25: number
-  p75: number
   segments: SegmentStat[]
 }
 
@@ -52,43 +51,23 @@ function quantile(sorted: number[], q: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo)
 }
 
-/** IQR ile uç değerleri ayıklar (5+ veri varsa) */
-export function trimOutliers(prices: number[]): number[] {
-  const sorted = [...prices].sort((a, b) => a - b)
-  if (sorted.length < 5) return sorted
-  const q1 = quantile(sorted, 0.25)
-  const q3 = quantile(sorted, 0.75)
-  const iqr = q3 - q1
-  return sorted.filter(p => p >= q1 - 1.5 * iqr && p <= q3 + 1.5 * iqr)
-}
-
 function summarize(prices: number[]) {
-  const s = trimOutliers(prices)
+  const s = [...prices].sort((a, b) => a - b)
   return {
     count: s.length,
     median: round2(quantile(s, 0.5)),
     average: s.length ? round2(s.reduce((a, b) => a + b, 0) / s.length) : 0,
     min: s[0] ?? 0,
     max: s[s.length - 1] ?? 0,
-    p25: round2(quantile(s, 0.25)),
-    p75: round2(quantile(s, 0.75)),
   }
 }
 
-/**
- * Piyasa ortası:
- * - Alış fiyatı biliniyorsa hesaba katılan ürünler zaten karşılaştırılabilir banttadır: hepsi kullanılır.
- * - Bilinmiyorsa lüks markalar ortalamayı anlamsız yükseltmesin diye pazaryeri + hızlı moda
- *   kullanılır (en az 5 ürün varsa); premium ayrı segment olarak gösterilir.
- */
-export function computeStats(items: PricedItem[], opts: { costKnown?: boolean } = {}): PriceStats {
+export function computeStats(items: PricedItem[]): PriceStats {
   const included = items.filter(i => i.included && i.price > 0)
-  const mainstream = included.filter(i => i.segment !== 'premium')
-  const base = !opts.costKnown && mainstream.length >= 5 ? mainstream : included
-  const all = summarize(base.map(i => i.price))
+  const all = summarize(included.map(i => i.price))
   const segments = SEGMENT_ORDER.map(segment => {
     const s = summarize(included.filter(i => i.segment === segment).map(i => i.price))
-    return { segment, label: SEGMENT_INFO[segment].label, count: s.count, median: s.median, min: s.min, max: s.max }
+    return { segment, label: SEGMENT_INFO[segment].label, ...s }
   }).filter(s => s.count > 0)
   return { ...all, segments }
 }
@@ -101,7 +80,7 @@ export function charmPrice(n: number): number {
 }
 
 export interface PriceSuggestion {
-  key: 'market' | 'premium' | 'cost'
+  key: 'market' | 'average' | Segment | 'cost'
   label: string
   note: string
   value: number
@@ -110,17 +89,22 @@ export interface PriceSuggestion {
 
 /**
  * Fiyat önerileri.
- * Önerilen: piyasa ortası (tüm uyumlu ürünlerin medyanı). Alış fiyatı biliniyorsa
- * önerilen fiyat en az alış × 2 olur (sağlıklı marj). Premium konum ayrı seçenek olarak sunulur.
+ * Önerilen: markaların medyan fiyatı (tek bir uç markanın etkisi az). Alış fiyatı biliniyorsa
+ * önerilen fiyat en az alış × 2 olur (sağlıklı marj). Ortalama ve segment ortalamaları seçenek olarak sunulur.
  */
 export function suggestPrices(stats: PriceStats, cost?: number): PriceSuggestion[] {
   const out: PriceSuggestion[] = []
   if (stats.count > 0) {
-    out.push({ key: 'market', label: 'Piyasa ortası', note: `${stats.count} benzer ürünün medyanı`, value: charmPrice(stats.median) })
+    out.push({ key: 'market', label: 'Piyasa ortası', note: `${stats.count} markanın medyanı`, value: charmPrice(stats.median) })
+    out.push({ key: 'average', label: 'Ortalama', note: `${stats.count} markanın ortalaması`, value: charmPrice(stats.average) })
   }
-  const premium = stats.segments.find(s => s.segment === 'premium')
-  if (premium && premium.count >= 2) {
-    out.push({ key: 'premium', label: 'Premium konum', note: `${premium.count} premium ürünün medyanı`, value: charmPrice(premium.median) })
+  for (const s of stats.segments) {
+    out.push({
+      key: s.segment,
+      label: s.label,
+      note: `${s.count} markanın ortalaması`,
+      value: charmPrice(s.average),
+    })
   }
   if (cost && cost > 0) {
     out.push({ key: 'cost', label: 'Alış × 2,5', note: 'Butik modada yaygın çarpan', value: charmPrice(cost * 2.5) })

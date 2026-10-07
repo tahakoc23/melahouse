@@ -36,9 +36,10 @@ export async function POST(request: Request) {
     const cost = Number(body.costPrice);
     const result = await runResearch(attributes, queryOverride, Number.isFinite(cost) && cost > 0 ? cost : undefined);
 
-    // Toptancı ürününden açıldıysa, fiyat hesabına giren ürünleri kaydet
+    // Toptancı ürününden açıldıysa, fiyatı alınan markaların ürünlerini kaydet
     if (supplierProductId) {
-      const included = result.items.filter(i => i.included);
+      const pickIds = new Set(result.brands.filter(b => b.selected && b.pickId).map(b => b.pickId))
+      const included = result.items.filter(i => pickIds.has(i.id));
       if (included.length > 0) {
         const adminClient = createAdminClient();
         const { error: delErr } = await adminClient

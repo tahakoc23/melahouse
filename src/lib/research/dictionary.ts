@@ -178,6 +178,8 @@ export const COLORS: (ColorDef & { family: string })[] = [
   { key: 'turuncu', label: 'Turuncu', roots: ['turuncu', 'oranj', 'somon', 'mercan'], family: 'turuncu' },
   { key: 'gold', label: 'Gold', roots: ['gold', 'altin'], family: 'metal' },
   { key: 'gumus', label: 'Gümüş', roots: ['gumus', 'silver'], family: 'metal' },
+  // Düz renk aranırken çok renkli ürün renk çelişkisidir
+  { key: 'cok-renkli', label: 'Çok renkli', roots: ['cok renkli', 'renkli', 'multicolor', 'multi renk', 'karisik renk'], family: 'cok' },
 ]
 
 export function colorFromText(text: string): (typeof COLORS)[number] | null {
@@ -214,12 +216,16 @@ export const DETAILS: DetailDef[] = [
   { key: 'kisa-kollu', label: 'Kısa kollu', roots: ['kisa kollu', 'kisa kol'], group: 'kol' },
   { key: 'uzun-kollu', label: 'Uzun kollu', roots: ['uzun kollu', 'uzun kol'], group: 'kol' },
   { key: 'v-yaka', label: 'V yaka', roots: ['v yaka'], group: 'yaka' },
-  { key: 'bisiklet-yaka', label: 'Bisiklet yaka', roots: ['bisiklet yaka', 'sifir yaka'], group: 'yaka' },
+  { key: 'bisiklet-yaka', label: 'Bisiklet yaka', roots: ['bisiklet yaka', 'sifir yaka', 'yuvarlak yaka'], group: 'yaka' },
   { key: 'balikci-yaka', label: 'Balıkçı yaka', roots: ['balikci', 'boğazli', 'bogazli'], group: 'yaka' },
   { key: 'gomlek-yaka', label: 'Gömlek yaka', roots: ['gomlek yaka', 'gomlek elbise', 'gomlek tipi'], group: 'yaka' },
   { key: 'kayik-yaka', label: 'Kayık yaka', roots: ['kayik yaka'], group: 'yaka' },
   { key: 'halter-yaka', label: 'Halter yaka', roots: ['halter'], group: 'yaka' },
   { key: 'kare-yaka', label: 'Kare yaka', roots: ['kare yaka'], group: 'yaka' },
+  { key: 'u-yaka', label: 'U yaka', roots: ['u yaka'], group: 'yaka' },
+  { key: 'hakim-yaka', label: 'Hakim yaka', roots: ['hakim yaka', 'dik yaka'], group: 'yaka' },
+  { key: 'polo-yaka', label: 'Polo yaka', roots: ['polo yaka'], group: 'yaka' },
+  { key: 'degaje-yaka', label: 'Degaje yaka', roots: ['degaje'], group: 'yaka' },
   { key: 'oversize', label: 'Oversize', roots: ['oversize', 'bol kesim', 'salas', 'relaxed'], group: 'kalip' },
   { key: 'dar-kesim', label: 'Dar kesim', roots: ['dar kesim', 'slim fit', 'bodycon', 'kalem'], group: 'kalip' },
   { key: 'yuksek-bel', label: 'Yüksek bel', roots: ['yuksek bel'], group: 'bel' },

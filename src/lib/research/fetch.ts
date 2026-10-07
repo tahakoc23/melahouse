@@ -81,7 +81,15 @@ async function viaEdge(url: string): Promise<string> {
 /** Önce doğrudan, engellenirse Edge üzerinden. */
 export async function fetchPage(url: string, opts: { edgeFallback?: boolean; headers?: Record<string, string> } = {}): Promise<string> {
   try {
-    return await direct(url, opts.headers)
+    try {
+      return await direct(url, opts.headers)
+    } catch (first) {
+      // Bağlantı yarıda koptuysa (HTTP yanıtı yok, zaman aşımı değil) bir kez daha dene
+      if (first instanceof FetchError && first.status === undefined && first.message !== 'zaman aşımı') {
+        return await direct(url, opts.headers)
+      }
+      throw first
+    }
   } catch (err) {
     const blocked = err instanceof FetchError && err.status !== undefined && BLOCKED.has(err.status)
     if (opts.edgeFallback !== false && blocked) {

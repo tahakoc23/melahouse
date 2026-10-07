@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, ExternalLink, ImageOff, RotateCcw, Search, Sparkles } from 'lucide-react'
+import { AlertTriangle, Check, ExternalLink, ImageOff, Minus, Plus, RefreshCw, RotateCcw, Search, Sparkles } from 'lucide-react'
 import { formatTL } from '@/lib/utils'
-import { computeStats, suggestPrices, SEGMENT_INFO, SEGMENT_ORDER, TIER_MAX_MULTIPLIER, TIER_MIN_MULTIPLIER, type Segment } from '@/lib/research/stats'
-import type { ResearchItem, ResearchResult } from '@/lib/research/engine'
+import { computeStats, suggestPrices, SEGMENT_INFO, SEGMENT_ORDER } from '@/lib/research/stats'
+import type { BrandReport, ResearchItem, ResearchResult } from '@/lib/research/engine'
 import { Badge, Button, Notice, TextInput } from '@/components/admin/ui'
 
 export interface ResearchAttributesInput {
@@ -33,7 +33,11 @@ interface Props {
   autoRun?: boolean
 }
 
-type ViewFilter = 'included' | 'excluded' | 'all'
+/** Marka kimliği -> fiyatı alınan ürünün kimliği (null: marka hesapta değil) */
+type Choice = Record<string, string | null>
+
+const initialChoice = (r: ResearchResult): Choice =>
+  Object.fromEntries(r.brands.map(b => [b.id, b.selected && b.pickId ? b.pickId : null]))
 
 export default function PriceResearchPanel({
   attributes,
@@ -58,9 +62,8 @@ export default function PriceResearchPanel({
   const [error, setError] = useState('')
   const [result, setResult] = useState<ResearchResult | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({})
-  const [view, setView] = useState<ViewFilter>('included')
-  const [segment, setSegment] = useState<Segment | 'all'>('all')
+  const [choice, setChoice] = useState<Choice>({})
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [applied, setApplied] = useState<number | null>(null)
 
   const hasInput = !!(attrs.name?.trim() || attrs.category?.trim())
@@ -89,9 +92,8 @@ export default function PriceResearchPanel({
       const r = data.result as ResearchResult
       setResult(r)
       setSearchQuery(r.plan.query.full)
-      setOverrides({})
-      setView('included')
-      setSegment('all')
+      setChoice(initialChoice(r))
+      setExpanded(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Piyasa araştırması yapılamadı.')
     } finally {
@@ -108,29 +110,37 @@ export default function PriceResearchPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRun, hasInput])
 
-  const items: ResearchItem[] = useMemo(
-    () => (result?.items || []).map(i => (i.id in overrides ? { ...i, included: overrides[i.id] } : i)),
-    [result, overrides],
+  const itemById = useMemo(() => new Map((result?.items || []).map(i => [i.id, i])), [result])
+  const itemsByBrand = useMemo(() => {
+    const m = new Map<string, ResearchItem[]>()
+    for (const i of result?.items || []) m.set(i.brandId, [...(m.get(i.brandId) || []), i])
+    return m
+  }, [result])
+
+  const brands = result?.brands || []
+  const pickedOf = (b: BrandReport) => (choice[b.id] ? itemById.get(choice[b.id]!) : undefined)
+  const counted = brands.filter(b => pickedOf(b))
+  // Hesapta olmayan ama benzer ürünü olan markalar: tek tıkla eklenebilir
+  const reserve = brands.filter(b => !pickedOf(b) && b.pickId)
+  const missing = brands.filter(b => !b.pickId)
+
+  const stats = useMemo(
+    () => computeStats(counted.map(b => ({ ...pickedOf(b)!, included: true }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [choice, result],
   )
-  const costKnown = !!(costPrice && costPrice > 0)
-  const stats = useMemo(() => computeStats(items, { costKnown }), [items, costKnown])
   const suggestions = useMemo(() => suggestPrices(stats, costPrice), [stats, costPrice])
   const recommended = suggestions.find(s => s.recommended)
-
-  const counts = {
-    included: items.filter(i => i.included).length,
-    excluded: items.filter(i => !i.included).length,
-  }
-  const visible = items.filter(
-    i =>
-      (view === 'all' || (view === 'included' ? i.included : !i.included)) && (segment === 'all' || i.segment === segment),
-  )
 
   const marginOf = (price: number) => (costPrice && costPrice > 0 && price > 0 ? ((price - costPrice) / price) * 100 : null)
 
   const apply = (price: number) => {
     onApplyPrice?.(price)
     setApplied(price)
+  }
+  const setBrand = (brandId: string, itemId: string | null) => {
+    setChoice(c => ({ ...c, [brandId]: itemId }))
+    setApplied(null)
   }
 
   /* -------------------------------------------------------------- */
@@ -143,8 +153,7 @@ export default function PriceResearchPanel({
           <div>
             <h3 className="text-[15px] font-semibold text-ink">Piyasa araştırması</h3>
             <p className="mt-0.5 text-[13px] text-kul">
-              Benzer ürünleri {result?.googleEnabled === false ? 'n11 ve marka sitelerinde' : 'Trendyol, Hepsiburada, n11 ve marka sitelerinde'} arar,
-              uymayanları eler.
+              Alt, orta ve premium segmentten 10 markanın sitesinde arar; her markadan en benzer ürünün fiyatını alır.
             </p>
           </div>
           {!result && (
@@ -198,7 +207,7 @@ export default function PriceResearchPanel({
           </div>
         )}
 
-        {loading && !result && <p className="mt-3 text-[13px] text-kul">Mağazalar taranıyor, bu 5–20 saniye sürebilir…</p>}
+        {loading && !result && <p className="mt-3 text-[13px] text-kul">Marka siteleri taranıyor, bu 5–20 saniye sürebilir…</p>}
         {error && (
           <div className="mt-3">
             <Notice tone="danger">{error}</Notice>
@@ -210,8 +219,8 @@ export default function PriceResearchPanel({
         <>
           {/* Özet ve öneri */}
           {stats.count === 0 ? (
-            <Notice tone="warning" title="Fiyat hesabına girecek benzer ürün kalmadı">
-              Aranan ifadeyi sadeleştirin (ör. “siyah midi elbise”) ya da “Elenenler” sekmesinden uygun ürünleri hesaba katın.
+            <Notice tone="warning" title="Hiçbir markada benzer ürün bulunamadı">
+              Aranan ifadeyi sadeleştirin (ör. “siyah midi elbise”) ve tekrar arayın.
             </Notice>
           ) : (
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)]">
@@ -240,18 +249,13 @@ export default function PriceResearchPanel({
               <div className="rounded-lg border border-[#E7E3DE] bg-white p-5">
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs text-kul">Piyasa ortası</p>
-                    <p className="mt-1 text-lg font-semibold text-ink">{formatTL(stats.median)}</p>
-                    <p className="text-xs text-kul">
-                      {stats.count} ürün
-                      {costKnown ? ' · alışınızla karşılaştırılabilir' : ' · pazaryeri ve hızlı moda'}
-                    </p>
+                    <p className="text-xs text-kul">Ortalama</p>
+                    <p className="mt-1 text-lg font-semibold text-ink">{formatTL(stats.average)}</p>
+                    <p className="text-xs text-kul">{stats.count} markanın fiyatı</p>
                   </div>
                   <div>
-                    <p className="text-xs text-kul">Çoğu ürün bu aralıkta</p>
-                    <p className="mt-1 text-lg font-semibold text-ink">
-                      {formatTL(stats.p25)} – {formatTL(stats.p75)}
-                    </p>
+                    <p className="text-xs text-kul">Piyasa ortası (medyan)</p>
+                    <p className="mt-1 text-lg font-semibold text-ink">{formatTL(stats.median)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-kul">En düşük / en yüksek</p>
@@ -261,29 +265,18 @@ export default function PriceResearchPanel({
                   </div>
                 </div>
                 <div className="mt-4 grid gap-2 border-t border-[#EFEBE6] pt-4 sm:grid-cols-3">
-                  {stats.segments.map(s => (
-                    <button
-                      key={s.segment}
-                      type="button"
-                      onClick={() => setSegment(segment === s.segment ? 'all' : s.segment)}
-                      className={`rounded-md border px-3 py-2 text-left transition-colors cursor-pointer ${
-                        segment === s.segment ? 'border-ink bg-[#F7F6F4]' : 'border-[#EFEBE6] hover:border-[#DCD6CF]'
-                      }`}
-                    >
-                      <span className="block text-xs text-kul">{s.label}</span>
-                      <span className="block text-sm font-semibold text-ink">{formatTL(s.median)}</span>
-                      <span className="block text-[11px] text-kul">{s.count} ürün · {SEGMENT_INFO[s.segment].hint}</span>
-                    </button>
-                  ))}
+                  {SEGMENT_ORDER.map(seg => {
+                    const s = stats.segments.find(x => x.segment === seg)
+                    const names = counted.filter(b => b.segment === seg).map(b => b.name)
+                    return (
+                      <div key={seg} className="rounded-md border border-[#EFEBE6] px-3 py-2">
+                        <span className="block text-xs text-kul">{SEGMENT_INFO[seg].label} ortalaması</span>
+                        <span className="block text-sm font-semibold text-ink">{s ? formatTL(s.average) : '—'}</span>
+                        <span className="block text-[11px] text-kul">{names.length ? names.join(', ') : 'marka yok'}</span>
+                      </div>
+                    )
+                  })}
                 </div>
-                {costKnown && (
-                  <p className="mt-4 border-t border-[#EFEBE6] pt-3 text-xs text-kul">
-                    Karşılaştırma bandı: {formatTL(costPrice! * TIER_MIN_MULTIPLIER)} – {formatTL(costPrice! * TIER_MAX_MULTIPLIER)} (alışın
-                    {' '}
-                    {TIER_MIN_MULTIPLIER.toLocaleString('tr-TR')}–{TIER_MAX_MULTIPLIER} katı). Daha ucuz ve lüks ürünler “Elenen”
-                    sekmesinde; isterseniz hesaba katabilirsiniz.
-                  </p>
-                )}
                 {onApplyPrice && suggestions.filter(s => !s.recommended).length > 0 && (
                   <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#EFEBE6] pt-4">
                     <span className="text-xs text-kul">Diğer seçenekler:</span>
@@ -301,138 +294,86 @@ export default function PriceResearchPanel({
             </div>
           )}
 
-          {/* Sonuç listesi */}
+          {/* Markalar: segment segment, her markadan bir ürün */}
           <div className="rounded-lg border border-[#E7E3DE] bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EFEBE6] px-4 py-3">
-              <div role="tablist" className="flex gap-1">
-                {(
-                  [
-                    ['included', `Hesaba katılan (${counts.included})`],
-                    ['excluded', `Elenen (${counts.excluded})`],
-                    ['all', `Tümü (${items.length})`],
-                  ] as [ViewFilter, string][]
-                ).map(([v, label]) => (
-                  <button
-                    key={v}
-                    role="tab"
-                    type="button"
-                    aria-selected={view === v}
-                    onClick={() => setView(v)}
-                    className={`rounded-md px-3 py-1.5 text-[13px] font-medium cursor-pointer ${
-                      view === v ? 'bg-ink text-white' : 'text-kul hover:bg-[#F1EEEA] hover:text-ink'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {(['all', ...SEGMENT_ORDER] as (Segment | 'all')[]).map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSegment(s)}
-                    className={`rounded-full border px-2.5 py-1 text-xs cursor-pointer ${
-                      segment === s ? 'border-ink text-ink' : 'border-[#E7E3DE] text-kul hover:text-ink'
-                    }`}
-                  >
-                    {s === 'all' ? 'Tüm mağazalar' : SEGMENT_INFO[s].label}
-                  </button>
-                ))}
-              </div>
+            <div className="border-b border-[#EFEBE6] px-4 py-3">
+              <p className="text-[14px] font-semibold text-ink">Fiyatı alınan markalar ({counted.length})</p>
+              <p className="text-xs text-kul">
+                Her markadan en benzer ürün seçildi. Uymayan ürünü “Değiştir” ile değiştirin ya da markayı hesaptan çıkarın.
+              </p>
             </div>
-
-            {visible.length === 0 ? (
-              <p className="px-4 py-10 text-center text-sm text-kul">Bu filtrede ürün yok.</p>
-            ) : (
-              <ul className={`grid gap-3 p-4 ${compact ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-2 md:grid-cols-4 xl:grid-cols-5'}`}>
-                {visible.map(item => (
-                  <li
-                    key={item.id}
-                    className={`flex flex-col overflow-hidden rounded-md border transition-colors ${
-                      item.included ? 'border-[#E7E3DE]' : 'border-dashed border-[#DCD6CF] opacity-70'
-                    }`}
-                  >
-                    <a href={item.url} target="_blank" rel="noreferrer noopener" className="group relative block aspect-[3/4] bg-[#F7F6F4]">
-                      {item.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-full items-center justify-center text-kul">
-                          <ImageOff className="h-6 w-6" />
-                        </span>
-                      )}
-                      <span className="absolute left-2 top-2 rounded bg-white/95 px-1.5 py-0.5 text-[11px] font-medium text-ink">
-                        {item.store}
-                      </span>
-                      <span
-                        className={`absolute right-2 top-2 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-                          item.score >= 75 ? 'bg-emerald-600 text-white' : item.score >= 55 ? 'bg-amber-500 text-white' : 'bg-[#8A817A] text-white'
-                        }`}
-                        title="Uyum puanı"
-                      >
-                        %{item.score}
-                      </span>
-                      <span className="absolute bottom-2 right-2 hidden rounded bg-white/95 p-1 text-ink group-hover:block">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </span>
-                    </a>
-                    <div className="flex flex-1 flex-col gap-1.5 p-2.5">
-                      <p className="line-clamp-2 text-[13px] leading-snug text-ink" title={item.title}>
-                        {item.title}
-                      </p>
-                      <p className="text-sm font-semibold text-ink">
-                        {formatTL(item.price)}
-                        {item.originalPrice && <span className="ml-1.5 text-xs font-normal text-kul line-through">{formatTL(item.originalPrice)}</span>}
-                      </p>
-                      {item.matched.length > 0 && (
-                        <p className="text-[11px] text-emerald-700">✓ {item.matched.join(' · ')}</p>
-                      )}
-                      {item.conflicts.length > 0 && (
-                        <p className="flex items-start gap-1 text-[11px] text-amber-700">
-                          <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-                          {item.conflicts.join(' · ')}
-                        </p>
-                      )}
-                      <label className="mt-auto flex cursor-pointer items-center gap-2 pt-1 text-xs text-ink">
-                        <input
-                          type="checkbox"
-                          checked={item.included}
-                          onChange={e => setOverrides(o => ({ ...o, [item.id]: e.target.checked }))}
-                          className="h-4 w-4 accent-[#171214]"
-                        />
-                        Fiyat hesabına kat
-                      </label>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {SEGMENT_ORDER.map(seg => {
+              const rows = counted.filter(b => b.segment === seg)
+              if (!rows.length) return null
+              return (
+                <div key={seg} className="border-b border-[#EFEBE6] last:border-b-0">
+                  <p className="bg-[#FAF9F7] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-kul">
+                    {SEGMENT_INFO[seg].label}
+                  </p>
+                  <ul className="divide-y divide-[#F1EEEA]">
+                    {rows.map(b => (
+                      <BrandRow
+                        key={b.id}
+                        brand={b}
+                        item={pickedOf(b)!}
+                        alternatives={itemsByBrand.get(b.id) || []}
+                        open={expanded === b.id}
+                        onToggle={() => setExpanded(expanded === b.id ? null : b.id)}
+                        onSelect={id => {
+                          setBrand(b.id, id)
+                          setExpanded(null)
+                        }}
+                        onRemove={() => setBrand(b.id, null)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
 
-          {/* Kaynaklar */}
-          <div className="space-y-2 text-xs text-kul">
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {result.sources.map(s => (
-                <a key={s.id} href={s.searchUrl} target="_blank" rel="noreferrer noopener" className="hover:text-ink">
-                  <span className={s.ok && s.relevant > 0 ? 'text-emerald-700' : s.ok ? 'text-kul' : 'text-rose-700'}>●</span>{' '}
-                  {s.name}: {s.ok ? `${s.relevant} uygun / ${s.found} sonuç` : s.message}
-                </a>
-              ))}
+          {reserve.length > 0 && (
+            <div className="rounded-lg border border-dashed border-[#DCD6CF] bg-white px-4 py-3">
+              <p className="text-[13px] font-semibold text-ink">Yedek markalar</p>
+              <p className="mb-2 text-xs text-kul">Benzer ürünü olan ama hesaba katılmayan markalar. Eklemek için tıklayın.</p>
+              <div className="flex flex-wrap gap-2">
+                {reserve.map(b => {
+                  const it = itemById.get(b.pickId!)!
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setBrand(b.id, b.pickId!)}
+                      className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#E7E3DE] px-3 py-1 text-xs text-ink hover:border-ink"
+                      title={it.title}
+                    >
+                      <Plus className="h-3 w-3" />
+                      {b.name} · {SEGMENT_INFO[b.segment].label.replace(' segment', '')} · {formatTL(it.price)}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            {!result.googleEnabled && (
+          )}
+
+          {/* Kaynak durumu ve elle bakma bağlantıları */}
+          <div className="space-y-2 text-xs text-kul">
+            {missing.length > 0 && (
               <p>
-                Trendyol ve Hepsiburada sonuçları için Google Alışveriş bağlantısı (SerpApi anahtarı) gerekli. O zamana kadar elle
-                bakabilirsiniz:
+                Benzer ürün bulunamayan markalar:{' '}
+                {missing.map((b, i) => (
+                  <span key={b.id}>
+                    {i > 0 && ', '}
+                    <a href={b.searchUrl} target="_blank" rel="noreferrer noopener" className="underline-offset-2 hover:text-ink hover:underline">
+                      {b.name}
+                    </a>
+                    {!b.ok && <span className="text-rose-700"> (erişilemedi)</span>}
+                  </span>
+                ))}
               </p>
             )}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span>Pazaryerlerine elle bakın:</span>
               {result.manualLinks.map(l => (
                 <a
                   key={l.name}
@@ -451,3 +392,139 @@ export default function PriceResearchPanel({
     </div>
   )
 }
+
+/* ------------------------------------------------------------------ */
+
+function Thumb({ item, className }: { item: ResearchItem; className: string }) {
+  return (
+    <a href={item.url} target="_blank" rel="noreferrer noopener" className={`block shrink-0 overflow-hidden rounded bg-[#F7F6F4] ${className}`}>
+      {item.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.image} alt={item.title} loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full items-center justify-center text-kul">
+          <ImageOff className="h-4 w-4" />
+        </span>
+      )}
+    </a>
+  )
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold text-white ${
+        score >= 75 ? 'bg-emerald-600' : score >= 55 ? 'bg-amber-500' : 'bg-[#8A817A]'
+      }`}
+      title="Benzerlik puanı"
+    >
+      %{score}
+    </span>
+  )
+}
+
+function BrandRow({
+  brand,
+  item,
+  alternatives,
+  open,
+  onToggle,
+  onSelect,
+  onRemove,
+}: {
+  brand: BrandReport
+  item: ResearchItem
+  alternatives: ResearchItem[]
+  open: boolean
+  onToggle: () => void
+  onSelect: (id: string) => void
+  onRemove: () => void
+}) {
+  const others = alternatives.filter(a => a.id !== item.id)
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-start gap-3">
+        <Thumb item={item} className="h-16 w-12" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-semibold text-ink">{brand.name}</span>
+            <ScoreBadge score={item.score} />
+            {!item.eligible && (
+              <span
+                className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800"
+                title="Bu markada birebir aynı model yok; en yakın model alındı"
+              >
+                Yakın model
+              </span>
+            )}
+          </div>
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="line-clamp-1 text-[13px] text-ink/80 underline-offset-2 hover:underline"
+            title={item.title}
+          >
+            {item.title}
+          </a>
+          {item.matched.length > 0 && <p className="text-[11px] text-emerald-700">✓ {item.matched.join(' · ')}</p>}
+          {item.conflicts.length > 0 && (
+            <p className="flex items-start gap-1 text-[11px] text-amber-700">
+              <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+              {item.conflicts.join(' · ')}
+            </p>
+          )}
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-semibold text-ink">{formatTL(item.price)}</p>
+          {item.originalPrice && <p className="text-xs text-kul line-through">{formatTL(item.originalPrice)}</p>}
+          <div className="mt-1 flex justify-end gap-1">
+            {others.length > 0 && (
+              <button
+                type="button"
+                onClick={onToggle}
+                className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-kul hover:bg-[#F1EEEA] hover:text-ink"
+              >
+                <RefreshCw className="h-3 w-3" /> Değiştir
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onRemove}
+              className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-kul hover:bg-[#F1EEEA] hover:text-ink"
+            >
+              <Minus className="h-3 w-3" /> Çıkar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {open && (
+        <ul className="mt-3 grid gap-2 rounded-md bg-[#FAF9F7] p-2 sm:grid-cols-2">
+          {others.map(a => (
+            <li key={a.id} className={`flex items-center gap-2 rounded bg-white p-2 ${a.eligible || a.near ? '' : 'opacity-60'}`}>
+              <Thumb item={a} className="h-12 w-9" />
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-1 text-xs text-ink" title={a.title}>
+                  {a.title}
+                </p>
+                <p className="text-xs font-semibold text-ink">
+                  {formatTL(a.price)} <ScoreBadge score={a.score} />
+                </p>
+                {a.conflicts.length > 0 && <p className="line-clamp-1 text-[11px] text-amber-700">{a.conflicts.join(' · ')}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelect(a.id)}
+                className="shrink-0 cursor-pointer rounded border border-[#E7E3DE] px-2 py-1 text-[11px] text-ink hover:border-ink"
+              >
+                Bunu seç
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+

@@ -1,83 +1,39 @@
 import * as cheerio from 'cheerio'
 import { absoluteUrl, fetchPage, findJsonObjects, parsePrice } from './fetch'
+import { enc, str, type RawItem, type Source, type SourceQuery } from './brands/_shared'
+import { addax } from './brands/addax'
+import { beymenClub } from './brands/beymenclub'
+import { colins } from './brands/colins'
+import { exquise } from './brands/exquise'
+import { jimmykey } from './brands/jimmykey'
+import { mudo } from './brands/mudo'
+import { nocturne } from './brands/nocturne'
+import { oxxo } from './brands/oxxo'
+import { perspective, setre } from './brands/ticimax'
+import { tozlu } from './brands/tozlu'
+import { roman, sarar } from './brands/tsoft'
+import { yargici } from './brands/yargici'
 
-import type { Segment } from './stats'
+export type { RawItem, Segment, Source, SourceQuery } from './brands/_shared'
 
-export type { Segment }
-
-export interface RawItem {
-  store: string
-  segment: Segment
-  title: string
-  url: string
-  price: number
-  originalPrice?: number
-  image?: string
-  brand?: string
-}
-
-export interface SourceQuery {
-  /** Detaylı sorgu (renk + detay + kumaş + kategori) */
-  full: string
-  /** Geniş sorgu (renk + kategori): küçük kataloglu marka siteleri için */
-  broad: string
-}
-
-export interface Source {
-  id: string
-  name: string
-  segment: Segment
-  /** Kullanıcıya gösterilecek arama sayfası */
-  searchUrl: (q: SourceQuery) => string
-  run: (q: SourceQuery) => Promise<RawItem[]>
-}
-
-const enc = encodeURIComponent
-const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v))
+/**
+ * Piyasa araştırması kaynakları: yalnızca marka siteleri (her markadan bir fiyat alınır).
+ * Hepsi Frankfurt'taki sunucumuzdan erişilebilir olduğu test edildi. Engelleyenler (DeFacto, Mavi,
+ * Twist, Machka, Boyner, Zara grubu, H&M, Mango, Trendyol, Hepsiburada) listede yok.
+ */
 
 function womenQuery(q: string) {
   return /kad[iı]n/i.test(q) ? q : `kadın ${q}`
 }
 
 /* ------------------------------------------------------------------ */
-/* Doğrudan okunan kaynaklar                                           */
+/* Markalar                                                            */
 /* ------------------------------------------------------------------ */
-
-const n11: Source = {
-  id: 'n11',
-  name: 'n11',
-  segment: 'pazaryeri',
-  searchUrl: q => `https://www.n11.com/arama?q=${enc(womenQuery(q.full))}`,
-  async run(q) {
-    const html = await fetchPage(this.searchUrl(q))
-    return findJsonObjects(html, '"sellerNickName"')
-      .filter(o => /kad[iı]n/i.test(str(o.category1Name)) || !o.category1Name)
-      .map(o => {
-        // Eski biçim: priceInfo.finalPrice + productUrl; yeni biçim (2026): displayPrice + url
-        const info = (o.priceInfo || {}) as Record<string, unknown>
-        const area = (o.finalPriceAreaDTO || {}) as Record<string, unknown>
-        const price = parsePrice(info.finalPrice) || parsePrice(area.finalPrice) || parsePrice(o.displayPrice)
-        const old = parsePrice(info.oldPrice) || parsePrice(o.oldPrice)
-        const image = str(o.imageUrl) || str((o.imagePathList as unknown[] | undefined)?.[0])
-        return {
-          store: 'n11',
-          segment: 'pazaryeri' as const,
-          // subtitle sonuna beden ekleyebiliyor ("... Siyah S"); title temiz
-          title: str(o.title) || str(o.subtitle),
-          url: absoluteUrl(str(o.productUrl) || str(o.urlWithoutSellerShop) || str(o.url), 'https://www.n11.com'),
-          price,
-          originalPrice: old > price ? Math.round(old * 100) / 100 : undefined,
-          image: image.replace('{0}', '500') || undefined,
-          brand: str(o.brand) || undefined,
-        }
-      })
-  },
-}
 
 const lcw: Source = {
   id: 'lcw',
   name: 'LC Waikiki',
-  segment: 'marka',
+  segment: 'alt',
   searchUrl: q => `https://www.lcw.com/arama?q=${enc(womenQuery(q.full))}`,
   async run(q) {
     const html = await fetchPage(this.searchUrl(q))
@@ -88,7 +44,7 @@ const lcw: Source = {
         const original = parsePrice(o.Price)
         return {
           store: 'LC Waikiki',
-          segment: 'marka' as const,
+          segment: 'alt' as const,
           title: [o.Brand, o.ProductDescription].filter(Boolean).join(' '),
           url: absoluteUrl(str(o.ModelUrl), 'https://www.lcw.com'),
           price: current || original,
@@ -103,7 +59,7 @@ const lcw: Source = {
 const koton: Source = {
   id: 'koton',
   name: 'Koton',
-  segment: 'marka',
+  segment: 'alt',
   searchUrl: q => `https://www.koton.com/list/?search_text=${enc(q.full)}`,
   async run(q) {
     const html = await fetchPage(this.searchUrl(q))
@@ -117,7 +73,7 @@ const koton: Source = {
       const list = parsePrice(o.unit_price)
       out.push({
         store: 'Koton',
-        segment: 'marka',
+        segment: 'alt',
         title: [str(o.name), str(o.color)].filter(Boolean).join(' '),
         url,
         price: sale || list,
@@ -133,7 +89,7 @@ const koton: Source = {
 const penti: Source = {
   id: 'penti',
   name: 'Penti',
-  segment: 'marka',
+  segment: 'alt',
   searchUrl: q => `https://www.penti.com/tr/search?text=${enc(q.broad)}`,
   async run(q) {
     const html = await fetchPage(this.searchUrl(q))
@@ -152,7 +108,7 @@ const penti: Source = {
       seen.add(href)
       out.push({
         store: 'Penti',
-        segment: 'marka',
+        segment: 'alt',
         title: `Penti ${title}`,
         url: absoluteUrl(href, 'https://www.penti.com'),
         price: Math.min(...prices),
@@ -197,39 +153,7 @@ const network: Source = {
   },
 }
 
-const beymen: Source = {
-  id: 'beymen',
-  name: 'Beymen',
-  segment: 'premium',
-  searchUrl: q => `https://www.beymen.com/tr/search?q=${enc(q.full)}`,
-  async run(q) {
-    const html = await fetchPage(this.searchUrl(q))
-    const seen = new Set<string>()
-    const out: RawItem[] = []
-    for (const o of findJsonObjects(html, '"actualPrice"')) {
-      const url = str(o.productUrl)
-      if (!url || !o.displayName || seen.has(url)) continue
-      if (o.gender && !/kad[iı]n/i.test(str(o.gender))) continue
-      seen.add(url)
-      const actual = parsePrice(o.actualPrice)
-      const original = parsePrice(o.originalPrice)
-      const img = (o.images as unknown[] | undefined)?.[0]
-      out.push({
-        store: 'Beymen',
-        segment: 'premium',
-        title: [str(o.brandName), str(o.displayName), str(o.variant)].filter(Boolean).join(' '),
-        url: absoluteUrl(url, 'https://www.beymen.com'),
-        price: actual || original,
-        originalPrice: original > actual ? original : undefined,
-        image: typeof img === 'string' ? img.replace('{width}', '400').replace('{height}', '600') : undefined,
-        brand: str(o.brandName) || undefined,
-      })
-    }
-    return out
-  },
-}
-
-function boynerGroupBrand(brand: 'İpekyol' | 'Twist', host: string, id: string): Source {
+function boynerGroupBrand(brand: 'İpekyol', host: string, id: string): Source {
   return {
     id,
     name: brand,
@@ -267,152 +191,24 @@ function boynerGroupBrand(brand: 'İpekyol' | 'Twist', host: string, id: string)
 
 const ipekyol = boynerGroupBrand('İpekyol', 'https://www.ipekyol.com.tr', 'ipekyol')
 
-/** Detaylı sorgu az sonuç verirse geniş sorguyla tekrar dener (küçük kataloglu marka siteleri) */
-async function fullThenBroad(q: SourceQuery, search: (term: string) => Promise<RawItem[]>, min = 4): Promise<RawItem[]> {
-  const first = await search(q.full)
-  if (first.length >= min || q.broad === q.full) return first
-  const second = await search(q.broad)
-  const seen = new Set(first.map(i => i.url))
-  return [...first, ...second.filter(i => !seen.has(i.url))]
-}
-
-const twist: Source = {
-  id: 'twist',
-  name: 'Twist',
-  segment: 'premium',
-  searchUrl: q => `https://www.twist.com.tr/arama?q=${enc(q.full)}`,
-  run(q) {
-    return fullThenBroad(q, async term => {
-      const html = await fetchPage(`https://www.twist.com.tr/arama?q=${enc(term)}`)
-      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
-      if (!m) return []
-      let products: Record<string, unknown>[] = []
-      try {
-        products = JSON.parse(m[1])?.props?.pageProps?.data?.response?.products ?? []
-      } catch {
-        return []
-      }
-      return products
-        .filter(p => p.name && p.routePath)
-        .map(p => {
-          const sale = parsePrice(p.salesPrice) || parsePrice(p.discountPrice)
-          const base = parsePrice(p.basePrice)
-          return {
-            store: 'Twist',
-            segment: 'premium' as const,
-            // shortName Twist'te rengi taşır ("Siyah")
-            title: `Twist ${str(p.name).trim()} ${str(p.shortName)}`.trim(),
-            url: `https://www.twist.com.tr/${str(p.routePath)}`,
-            price: sale || base,
-            originalPrice: base > sale ? base : undefined,
-            brand: 'Twist',
-          }
-        })
-    })
-  },
-}
-
-const roman: Source = {
-  id: 'roman',
-  name: 'Roman',
-  segment: 'premium',
-  searchUrl: q => `https://www.roman.com.tr/arama?q=${enc(q.full)}`,
-  run(q) {
-    return fullThenBroad(q, async term => {
-      const html = await fetchPage(`https://www.roman.com.tr/arama?q=${enc(term)}`)
-      const out: RawItem[] = []
-      // T-Soft: PRODUCT_DATA.push(JSON.parse('{\"id\":...}'))
-      for (const m of html.matchAll(/PRODUCT_DATA\.push\(JSON\.parse\('((?:[^'\\]|\\.)*)'\)\)/g)) {
-        let o: Record<string, unknown>
-        try {
-          o = JSON.parse(m[1].replace(/\\(.)/g, '$1'))
-        } catch {
-          continue
-        }
-        if (!o.name || !o.url) continue
-        const sale = parsePrice(o.total_sale_price)
-        const base = parsePrice(o.total_base_price)
-        out.push({
-          store: 'Roman',
-          segment: 'premium',
-          title: `Roman ${str(o.name).replace(/\s*Standart Renk\s*$/i, '')}`,
-          url: absoluteUrl(str(o.url), 'https://www.roman.com.tr'),
-          price: sale || base,
-          originalPrice: base > sale ? base : undefined,
-          image: str(o.image) || undefined,
-          brand: 'Roman',
-        })
-      }
-      return out
-    })
-  },
-}
-
-/* ------------------------------------------------------------------ */
-/* Google Alışveriş (SerpApi): Trendyol, Hepsiburada ve markalar       */
-/* ------------------------------------------------------------------ */
-
-const MARKETPLACES = ['trendyol', 'hepsiburada', 'n11', 'amazon', 'pazarama', 'ciceksepeti', 'pttavm', 'modanisa', 'morhipo']
-const PREMIUM = ['beymen', 'vakko', 'ipekyol', 'twist', 'machka', 'network', 'boyner', 'zara', 'mango', 'massimo', 'nocturne', 'roman', 'gizia', 'perspective', 'fabrika', 'adl', 'quzu']
-
-function segmentForStore(store: string): Segment {
-  const s = store.toLocaleLowerCase('tr')
-  if (MARKETPLACES.some(m => s.includes(m))) return 'pazaryeri'
-  if (PREMIUM.some(m => s.includes(m))) return 'premium'
-  return 'marka'
-}
-
-export const googleShopping: Source = {
-  id: 'google',
-  name: 'Google Alışveriş (Trendyol, Hepsiburada, markalar)',
-  segment: 'pazaryeri',
-  searchUrl: q => `https://www.google.com/search?tbm=shop&hl=tr&gl=tr&q=${enc(womenQuery(q.full))}`,
-  async run(q) {
-    const key = process.env.SERPAPI_API_KEY
-    if (!key) throw new Error('bağlantı kurulmadı')
-    const params = new URLSearchParams({
-      engine: 'google_shopping',
-      q: womenQuery(q.full),
-      gl: 'tr',
-      hl: 'tr',
-      google_domain: 'google.com.tr',
-      num: '60',
-      api_key: key,
-    })
-    const res = await fetch(`https://serpapi.com/search.json?${params}`, { cache: 'no-store' })
-    const data = (await res.json()) as {
-      error?: string
-      shopping_results?: Record<string, unknown>[]
-    }
-    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`)
-    return (data.shopping_results || []).map(r => {
-      const store = str(r.source) || 'Google Alışveriş'
-      const price = parsePrice(r.extracted_price ?? r.price)
-      const old = parsePrice(r.extracted_old_price ?? r.old_price)
-      return {
-        store,
-        segment: segmentForStore(store),
-        title: str(r.title),
-        url: str(r.link) || str(r.product_link),
-        price,
-        originalPrice: old > price ? old : undefined,
-        image: str(r.thumbnail) || undefined,
-      }
-    })
-  },
-}
-
-export const DIRECT_SOURCES: Source[] = [n11, lcw, koton, penti, network, beymen, ipekyol, twist, roman]
+/** Alt, orta ve premium segmentten markalar */
+export const BRAND_SOURCES: Source[] = [
+  // alt
+  lcw, koton, colins, addax, tozlu, oxxo, penti,
+  // orta
+  jimmykey, mudo, setre, yargici, exquise,
+  // premium (Nocturne fiyatları premium seviyesinde: ~10.000 TL)
+  network, ipekyol, roman, sarar, beymenClub, perspective, { ...nocturne, segment: 'premium' },
+]
 
 /** İç giyim kategorilerinde Penti anlamlı; diğerlerinde Penti'yi atla */
 export const LINGERIE_ONLY = new Set(['penti'])
 
-/** Kullanıcının tek tıkla elle bakabileceği aramalar (her zaman gösterilir) */
+/** Kullanıcının tek tıkla elle bakabileceği aramalar (pazaryerleri sunucumuzu engelliyor) */
 export function manualLinks(q: SourceQuery) {
   return [
     { name: 'Trendyol', url: `https://www.trendyol.com/sr?q=${enc(womenQuery(q.full))}` },
     { name: 'Hepsiburada', url: `https://www.hepsiburada.com/ara?q=${enc(womenQuery(q.full))}` },
-    { name: 'Beymen', url: `https://www.beymen.com/tr/search?q=${enc(q.full)}` },
-    { name: 'Google Alışveriş', url: googleShopping.searchUrl(q) },
+    { name: 'Google Alışveriş', url: `https://www.google.com/search?tbm=shop&hl=tr&gl=tr&q=${enc(womenQuery(q.full))}` },
   ]
 }
