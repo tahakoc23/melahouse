@@ -145,7 +145,8 @@ const network: Source = {
         url: `https://www.network.com.tr/${str(o.FriendlyURI)}-p-${str(o.ID)}`,
         price,
         originalPrice: p1 > price ? p1 : undefined,
-        image: str(file?.ImageResizePath) || undefined,
+        // Network görsel adresi boyut yer tutucusu içerir: .../mnresize/{width}/{height}/...
+        image: str(file?.ImageResizePath).replace('{width}', '400').replace('{height}', '600') || undefined,
         brand: 'Network',
       })
     }
