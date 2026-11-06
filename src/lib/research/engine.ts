@@ -90,8 +90,8 @@ export interface ResearchResult {
 
 /** Araştırma sonucunda fiyatı alınan marka sayısı */
 export const BRAND_TARGET = 10
-/** Segment sırası: dengeli seçimde önce orta, sonra alt ve premium */
-const PICK_ORDER: Segment[] = ['orta', 'alt', 'premium']
+/** Segment sırası: dengeli seçimde önce orta (fiyatın tabanı), sonra alt */
+const PICK_ORDER: Segment[] = ['orta', 'alt']
 
 const LINGERIE_CATEGORIES = new Set(['gecelik', 'pijama', 'sabahlik', 'sutyen', 'kulot', 'kombinezon', 'body'])
 const MIN_PRICE = 50
@@ -298,7 +298,7 @@ function pickRepresentative(items: ResearchItem[]): ResearchItem | undefined {
 }
 
 /**
- * 10 markayı segmentlere dengeli dağıtır: orta → alt → premium sırasıyla, her turda o segmentin
+ * Markaları segmentlere dengeli dağıtır: orta → alt sırasıyla, her turda o segmentin
  * en uyumlu markası seçilir. Bir segmentte marka kalmazsa diğerlerinden devam edilir.
  */
 function selectBalanced(brands: { id: string; segment: Segment; score: number }[], target: number): Set<string> {

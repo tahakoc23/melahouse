@@ -105,7 +105,7 @@ export default function PriceCard({
           <div className="border-t border-[#EFEBE6] pt-5">
             <h3 className="mb-1 text-sm font-semibold text-ink">Piyasa fiyat araştırması</h3>
             <p className="mb-3 text-xs text-kul">
-              Alt, orta ve premium segmentten 10 markada en benzer ürünün fiyatını bulur. Önerilen fiyatı tek tıkla satış fiyatına
+              Orta ve alt segment markalarda en benzer ürünün fiyatını bulur. Orta segmente göre önerilen fiyatı tek tıkla satış fiyatına
               yazabilirsiniz.
             </p>
             <PriceResearchPanel

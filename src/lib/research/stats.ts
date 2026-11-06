@@ -2,19 +2,21 @@
  * Fiyat istatistikleri. Hem sunucuda hem tarayıcıda kullanılır
  * (admin bir markayı hesaptan çıkardığında ya da başka ürününü seçtiğinde sonuçlar anında yeniden hesaplanır).
  *
- * Araştırma her markadan tek bir fiyat alır; markalar alt, orta ve premium segmentlere dağılır.
+ * Araştırma her markadan tek bir fiyat alır; markalar alt ve orta segmentlere dağılır; önerilen fiyat orta segmentten gelir.
  * Segment farkı bilerek istendiği için uç değer kırpılmaz; segment ortalamaları ayrıca gösterilir.
  */
 
-/** Marka segmenti: alt (bütçe), orta, premium */
-export type Segment = 'alt' | 'orta' | 'premium'
+/** Marka segmenti: alt (bütçe, referans), orta (önerilen fiyatın tabanı) */
+export type Segment = 'alt' | 'orta'
 
-export const SEGMENT_ORDER: Segment[] = ['alt', 'orta', 'premium']
+export const SEGMENT_ORDER: Segment[] = ['orta', 'alt']
 export const SEGMENT_INFO: Record<Segment, { label: string; hint: string }> = {
-  alt: { label: 'Alt segment', hint: 'LC Waikiki, Koton, Colin’s' },
-  orta: { label: 'Orta segment', hint: 'Mudo, Setre, Nocturne, Yargıcı' },
-  premium: { label: 'Premium', hint: 'İpekyol, Network, Roman, Sarar' },
+  alt: { label: 'Alt segment', hint: 'LC Waikiki, Koton, Colin’s, Addax' },
+  orta: { label: 'Orta segment', hint: 'Oxxo, Jimmy Key, Mudo, Yargıcı, Exquise' },
 }
+
+/** Önerilen fiyat alışın bu katının altına düşerse satışta marj kalmaz: ekranda uyarılır */
+export const MIN_HEALTHY_MULTIPLIER = 1.5
 
 export interface PricedItem {
   price: number
@@ -89,14 +91,20 @@ export interface PriceSuggestion {
 
 /**
  * Fiyat önerileri.
- * Önerilen: markaların medyan fiyatı (tek bir uç markanın etkisi az). Alış fiyatı biliniyorsa
- * önerilen fiyat en az alış × 2 olur (sağlıklı marj). Ortalama ve segment ortalamaları seçenek olarak sunulur.
+ * Önerilen: orta segment markalarının medyan fiyatı (en az 2 marka yoksa tüm markaların medyanı).
+ * Alış fiyatı önerilen fiyatı yukarı itmez: alış yüksekse ürün o piyasaya uygun değildir ve ekranda uyarılır.
  */
 export function suggestPrices(stats: PriceStats, cost?: number): PriceSuggestion[] {
   const out: PriceSuggestion[] = []
+  const mid = stats.segments.find(s => s.segment === 'orta')
+  const useMid = !!mid && mid.count >= 2
   if (stats.count > 0) {
-    out.push({ key: 'market', label: 'Piyasa ortası', note: `${stats.count} markanın medyanı`, value: charmPrice(stats.median) })
-    out.push({ key: 'average', label: 'Ortalama', note: `${stats.count} markanın ortalaması`, value: charmPrice(stats.average) })
+    out.push(
+      useMid
+        ? { key: 'market', label: 'Orta segment fiyatı', note: `${mid!.count} orta segment markasının medyanı`, value: charmPrice(mid!.median), recommended: true }
+        : { key: 'market', label: 'Piyasa ortası', note: `${stats.count} markanın medyanı`, value: charmPrice(stats.median), recommended: true },
+    )
+    out.push({ key: 'average', label: 'Tüm markaların ortalaması', note: `${stats.count} markanın ortalaması`, value: charmPrice(stats.average) })
   }
   for (const s of stats.segments) {
     out.push({
@@ -109,13 +117,5 @@ export function suggestPrices(stats: PriceStats, cost?: number): PriceSuggestion
   if (cost && cost > 0) {
     out.push({ key: 'cost', label: 'Alış × 2,5', note: 'Butik modada yaygın çarpan', value: charmPrice(cost * 2.5) })
   }
-  if (!out.length) return out
-
-  let target = stats.count > 0 ? stats.median : 0
-  if (cost && cost > 0) target = Math.max(target, cost * 2)
-  const recommended = charmPrice(target || out[0].value)
-  const match = out.find(s => s.value === recommended)
-  if (match) match.recommended = true
-  else out.unshift({ key: 'market', label: 'Önerilen', note: 'Piyasa ortası, alış × 2 marjı korunarak', value: recommended, recommended: true })
   return out
 }

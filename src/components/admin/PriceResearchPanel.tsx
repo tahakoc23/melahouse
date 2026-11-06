@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, ExternalLink, ImageOff, Minus, Plus, RefreshCw, RotateCcw, Search, Sparkles } from 'lucide-react'
 import { formatTL } from '@/lib/utils'
-import { computeStats, suggestPrices, SEGMENT_INFO, SEGMENT_ORDER } from '@/lib/research/stats'
+import { computeStats, suggestPrices, MIN_HEALTHY_MULTIPLIER, SEGMENT_INFO, SEGMENT_ORDER } from '@/lib/research/stats'
 import type { BrandReport, ResearchItem, ResearchResult } from '@/lib/research/engine'
 import { Badge, Button, Notice, TextInput } from '@/components/admin/ui'
 
@@ -153,7 +153,7 @@ export default function PriceResearchPanel({
           <div>
             <h3 className="text-[15px] font-semibold text-ink">Piyasa araştırması</h3>
             <p className="mt-0.5 text-[13px] text-kul">
-              Alt, orta ve premium segmentten 10 markanın sitesinde arar; her markadan en benzer ürünün fiyatını alır.
+              Orta ve alt segment markaların sitesinde arar, her markadan en benzer ürünün fiyatını alır. Önerilen fiyat orta segmente göre hesaplanır.
             </p>
           </div>
           {!result && (
@@ -217,6 +217,13 @@ export default function PriceResearchPanel({
 
       {result && (
         <>
+          {recommended && costPrice && costPrice > 0 && recommended.value < costPrice * MIN_HEALTHY_MULTIPLIER && (
+            <Notice tone="warning" title="Alış fiyatı bu piyasa için yüksek">
+              Orta segment fiyatı alışınızın {MIN_HEALTHY_MULTIPLIER.toLocaleString('tr-TR')} katının altında kalıyor; bu fiyatla kargo, iade ve
+              komisyon sonrası kâr kalmaz. Daha uygun fiyatlı bir toptancı arayın.
+            </Notice>
+          )}
+
           {/* Özet ve öneri */}
           {stats.count === 0 ? (
             <Notice tone="warning" title="Hiçbir markada benzer ürün bulunamadı">
@@ -264,7 +271,7 @@ export default function PriceResearchPanel({
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-2 border-t border-[#EFEBE6] pt-4 sm:grid-cols-3">
+                <div className="mt-4 grid gap-2 border-t border-[#EFEBE6] pt-4 sm:grid-cols-2">
                   {SEGMENT_ORDER.map(seg => {
                     const s = stats.segments.find(x => x.segment === seg)
                     const names = counted.filter(b => b.segment === seg).map(b => b.name)
